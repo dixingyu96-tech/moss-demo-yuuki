@@ -660,6 +660,12 @@ function App() {
       earlier: sessions.filter((session) => !session.isFavorite && deriveHistoryCategory(session.updatedAt) === "earlier")
     };
   }, [activeAgentHistories]);
+  const activeHistorySession = useMemo(
+    () => (activeHistoryId ? activeAgentHistories.find((session) => session.id === activeHistoryId) ?? null : null),
+    [activeAgentHistories, activeHistoryId]
+  );
+  const isCollapsedFavoritesSelected = Boolean(activeHistorySession?.isFavorite);
+  const isCollapsedHistorySelected = Boolean(activeHistorySession && !activeHistorySession.isFavorite);
   const collapsedNavItems = useMemo(
     () =>
       [
@@ -1486,6 +1492,7 @@ function App() {
   const quoteFileToComposer = (fileName: string) => {
     const file = files.find((item) => item.name === fileName);
     const referenceId = `reference-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let nextCursor = 0;
     addComposerFile({
       id: referenceId,
       name: fileName,
@@ -1494,11 +1501,16 @@ function App() {
     });
     setDraft((current) => {
       const marker = `${COMPOSER_REFERENCE_START}${fileName}${COMPOSER_REFERENCE_END}`;
-      return current ? `${current} ${marker}` : marker;
+      const nextDraft = current ? `${current} ${marker}` : marker;
+      nextCursor = nextDraft.length;
+      return nextDraft;
     });
     setOpenFileMenu(null);
     setFileMentionRange(null);
-    window.requestAnimationFrame(() => textareaRef.current?.focus());
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
   };
 
   const handleComposerChange = (event: ReactChangeEvent<HTMLTextAreaElement>) => {
@@ -1691,6 +1703,19 @@ function App() {
           }
 
           const fileName = composerFiles.find((item) => item.source === "reference" && item.name === node.name)?.name ?? node.name;
+          const removeReferenceFromComposer = () => {
+            setDraft((current) => `${current.slice(0, node.start)}${current.slice(node.end)}`);
+            setComposerFiles((current) => {
+              const targetIndex = current.findIndex((file) => file.source === "reference" && file.name === node.name);
+              if (targetIndex === -1) return current;
+              return current.filter((_, idx) => idx !== targetIndex);
+            });
+            setFileMentionRange(null);
+            window.requestAnimationFrame(() => {
+              textareaRef.current?.focus();
+              textareaRef.current?.setSelectionRange(node.start, node.start);
+            });
+          };
 
           return (
             <button
@@ -1699,19 +1724,12 @@ function App() {
               className="composer-reference-chip"
               aria-label={`移除引用文件 ${fileName}`}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                setDraft((current) => `${current.slice(0, node.start)}${current.slice(node.end)}`);
-                setComposerFiles((current) => {
-                  const targetIndex = current.findIndex((file) => file.source === "reference" && file.name === node.name);
-                  if (targetIndex === -1) return current;
-                  return current.filter((_, idx) => idx !== targetIndex);
-                });
-                setFileMentionRange(null);
-                window.requestAnimationFrame(() => {
-                  textareaRef.current?.focus();
-                  textareaRef.current?.setSelectionRange(node.start, node.start);
-                });
+              onKeyDown={(event) => {
+                if (event.key !== "Delete" && event.key !== "Backspace") return;
+                event.preventDefault();
+                removeReferenceFromComposer();
               }}
+              onClick={removeReferenceFromComposer}
             >
               <span className="composer-reference-chip-icon-wrap" aria-hidden="true">
                 <img className="composer-reference-chip-icon" src={getFileIcon(fileName)} alt="" />
@@ -2658,8 +2676,14 @@ function App() {
                       icon !== "xinhuihua" ? "secondary-nav-icon" : "",
                       icon === "xinhuihua" && isNewChatActive ? "active" : "",
                       icon === "xinhuihua" && isNewChatActive ? "brand-active" : "",
-                      icon === "shoucang" && openCollapsedPopover?.type === "favorites" ? "active" : "",
-                      icon === "lishihuihua" && openCollapsedPopover?.type === "history" ? "active" : ""
+                      icon === "shoucang" &&
+                      (openCollapsedPopover?.type === "favorites" || isCollapsedFavoritesSelected)
+                        ? "active"
+                        : "",
+                      icon === "lishihuihua" &&
+                      (openCollapsedPopover?.type === "history" || isCollapsedHistorySelected)
+                        ? "active"
+                        : ""
                     ]
                       .filter(Boolean)
                       .join(" ")}

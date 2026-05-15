@@ -57,7 +57,7 @@
   --moss-sidebar-feedback-danger: var(--colorError);
   --moss-sidebar-avatar-size: var(--height-control-xs);
   --moss-sidebar-panel-shift: var(--padding-lg);
-  --moss-sidebar-collapsed-stream-gap: var(--gap-md);
+  --moss-sidebar-collapsed-stream-gap: 16px;
   --moss-sidebar-collapsed-popover-width: 260px;
   --moss-sidebar-collapsed-popover-max-height: 450px;
   --moss-sidebar-collapsed-popover-radius: var(--radius-md);
@@ -120,7 +120,7 @@
   --moss-main-content-safe-padding: var(--padding-xxxxl);
 
   --moss-hero-title: var(--text-primary);
-  --moss-hero-brand: var(--brand-primary);
+  --moss-hero-brand: var(--color-orange-light-6);
 
   --moss-card-bg: var(--surface-base);
   --moss-card-border: var(--colorBorderSecondary);
@@ -260,7 +260,7 @@
   --moss-files-panel-shadow: var(--shadow-subtle);
   --moss-files-panel-radius: var(--radius-sm);
   --moss-files-panel-header-height: 56px;
-  --moss-files-panel-card-min-width: 180px;
+  --moss-files-panel-card-min-width: 220px;
   --moss-files-panel-card-max-width: 320px;
   --moss-files-panel-card-preview-height: 120px;
   --moss-files-panel-card-height: calc(

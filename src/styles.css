@@ -2588,7 +2588,7 @@ textarea {
   cursor: pointer;
   text-align: left;
   overflow: hidden;
-  box-shadow: var(--shadow-subtle);
+  box-shadow: none;
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease;
@@ -2602,7 +2602,11 @@ textarea {
   right: -0.5px;
   height: calc(var(--moss-files-panel-card-preview-height) + 4px);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: linear-gradient(180deg, var(--colorFill) 0%, rgba(11, 11, 11, 0) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--fd-color-bg-container-secondary, var(--colorBgContainerSecondary)) 0%,
+    var(--fd-color-bg-container-tertiary, var(--colorBgContainerTertiary)) 100%
+  );
   opacity: 0;
   pointer-events: none;
   transition: opacity 160ms ease;
@@ -2790,7 +2794,7 @@ textarea {
 
 .file-card-menu-option.danger:hover,
 .file-card-menu-option.danger:focus-visible {
-  background: var(--colorErrorBgHover);
+  background: var(--colorErrorBg);
 }
 
 .file-card-menu-icon {
