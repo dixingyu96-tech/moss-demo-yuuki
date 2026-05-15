@@ -545,7 +545,7 @@ textarea {
   flex-direction: column;
   align-items: center;
   gap: var(--moss-sidebar-collapsed-stream-gap);
-  padding-top: var(--padding-md);
+  padding-top: 0;
   height: 100%;
 }
 

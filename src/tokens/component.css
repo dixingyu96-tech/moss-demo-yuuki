@@ -57,7 +57,7 @@
   --moss-sidebar-feedback-danger: var(--colorError);
   --moss-sidebar-avatar-size: var(--height-control-xs);
   --moss-sidebar-panel-shift: var(--padding-lg);
-  --moss-sidebar-collapsed-stream-gap: 16px;
+  --moss-sidebar-collapsed-stream-gap: 8px;
   --moss-sidebar-collapsed-popover-width: 260px;
   --moss-sidebar-collapsed-popover-max-height: 450px;
   --moss-sidebar-collapsed-popover-radius: var(--radius-md);
