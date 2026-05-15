@@ -1,0 +1,276 @@
+:root {
+  --moss-app-bg: var(--surface-canvas);
+  --moss-sidebar-bg: var(--surface-canvas);
+  --moss-sidebar-border: var(--border-subtle);
+  --moss-sidebar-divider: var(--colorBorderSecondary);
+  --moss-sidebar-width-expanded: 260px;
+  --moss-sidebar-width-collapsed: 48px;
+  --moss-sidebar-width-compact: 72px;
+  --moss-sidebar-line-width: 0.5px;
+  --moss-sidebar-collapsed-control-size: var(--height-control-md);
+  --moss-sidebar-main-offset-top: var(--padding-xxs);
+  --moss-sidebar-header-height: var(--spacing-4xl);
+  --moss-sidebar-header-padding-inline-start: var(--padding-xl);
+  --moss-sidebar-header-padding-inline-end: var(--padding-lg);
+  --moss-sidebar-title: var(--colorBlack);
+  --moss-sidebar-title-size: var(--font-size-xl);
+  --moss-sidebar-title-line-height: var(--line-height-xl);
+  --moss-sidebar-title-weight: var(--font-weight-600);
+  --moss-sidebar-title-max-width: 160px;
+  --moss-sidebar-title-hidden-shift: calc(var(--gap-lg) * -1);
+  --moss-sidebar-label: var(--colorTextPlaceholder);
+  --moss-sidebar-label-hover: var(--colorTextDescription);
+  --moss-sidebar-item-text: var(--text-secondary);
+  --moss-sidebar-icon: var(--colorIconNormal);
+  --moss-sidebar-icon-accent: var(--icon-accent);
+  --moss-sidebar-group-header-gap: var(--gap-xs);
+  --moss-sidebar-group-header-icon-size: var(--height-control-xs);
+  --moss-sidebar-group-header-padding-inline: var(--padding-lg);
+  --moss-sidebar-more-button-size: var(--height-control-sm);
+  --moss-sidebar-more-button-icon-size: var(--icon-size-sm);
+  --moss-sidebar-more-button-hover-bg: var(--colorFillTertiary);
+  --moss-sidebar-more-button-open-bg: var(--colorFillTertiary);
+  --moss-sidebar-more-button-open-shadow: var(--shadow-subtle);
+  --moss-sidebar-menu-bg: var(--colorBgElevated);
+  --moss-sidebar-menu-border: var(--colorBorderSecondary);
+  --moss-sidebar-menu-radius: var(--radius-md);
+  --moss-sidebar-menu-shadow: var(--shadow-secondary);
+  --moss-sidebar-menu-width: 100px;
+  --moss-sidebar-menu-padding: var(--padding-xs);
+  --moss-sidebar-menu-item-height: var(--height-control-md);
+  --moss-sidebar-menu-item-radius: var(--radius-xs);
+  --moss-sidebar-menu-item-gap: var(--gap-sm);
+  --moss-sidebar-menu-text: var(--colorTextHeading);
+  --moss-sidebar-menu-danger: var(--colorError);
+  --moss-sidebar-menu-danger-hover-bg: var(--colorErrorBg);
+  --moss-sidebar-menu-motion-duration: 180ms;
+  --moss-sidebar-menu-hover-bg: var(--colorBgTextNormalHover);
+  --moss-sidebar-menu-focus-ring: var(--colorPrimaryBorder);
+  --moss-sidebar-feedback-bg: var(--colorBgElevated);
+  --moss-sidebar-feedback-border: var(--colorBorderSecondary);
+  --moss-sidebar-feedback-text: var(--colorTextHeading);
+  --moss-sidebar-feedback-success-bg: var(--colorPrimaryBg);
+  --moss-sidebar-feedback-success-border: var(--colorPrimaryBorder);
+  --moss-sidebar-feedback-success: var(--colorPrimaryText);
+  --moss-sidebar-feedback-danger-bg: var(--colorErrorBg);
+  --moss-sidebar-feedback-danger-border: var(--colorErrorBorder);
+  --moss-sidebar-feedback-danger: var(--colorError);
+  --moss-sidebar-avatar-size: var(--height-control-xs);
+  --moss-sidebar-panel-shift: var(--padding-lg);
+  --moss-sidebar-collapsed-stream-gap: var(--gap-md);
+  --moss-sidebar-collapsed-popover-width: 260px;
+  --moss-sidebar-collapsed-popover-max-height: 450px;
+  --moss-sidebar-collapsed-popover-radius: var(--radius-md);
+  --moss-sidebar-collapsed-popover-padding: var(--padding-xs);
+  --moss-sidebar-collapsed-popover-item-height: 36px;
+  --moss-sidebar-collapsed-popover-item-gap: var(--gap-md);
+  --moss-sidebar-collapsed-popover-shadow: var(--shadow-secondary);
+  --moss-sidebar-collapsed-tooltip-bg: var(--colorBgSpotlight);
+  --moss-sidebar-collapsed-tooltip-text: var(--colorWhite);
+  --moss-sidebar-collapsed-tooltip-radius: var(--radius-sm);
+  --moss-sidebar-collapsed-tooltip-padding-inline: var(--padding-md);
+  --moss-sidebar-collapsed-tooltip-padding-block: var(--padding-xs);
+  --moss-sidebar-collapsed-tooltip-shadow: var(--shadow-secondary);
+  --moss-sidebar-collapsed-dot-size: 8px;
+  --moss-sidebar-hover-bg: var(--colorFillTertiary);
+  --moss-sidebar-hover-muted-bg: var(--colorFillTertiary);
+  --moss-sidebar-active-bg: var(--colorFillQuaternary);
+  --moss-sidebar-secondary-icon-hover-bg: var(--moss-sidebar-active-bg);
+  --moss-sidebar-secondary-icon-active-bg: var(--moss-sidebar-hover-bg);
+  --moss-sidebar-history-hover-bg: var(--colorFillTertiary);
+  --moss-sidebar-selected-text: var(--colorTextHeading);
+  --moss-sidebar-brand-bg: var(--colorPrimaryBg);
+  --moss-sidebar-brand-hover-bg: var(--colorPrimaryBgHover);
+  --moss-sidebar-user-border: var(--colorBorderSecondary);
+  --moss-sidebar-user-text: var(--colorTextHeading);
+  --moss-sidebar-footer-link-height: var(--height-control-md);
+  --moss-sidebar-footer-links-row-height: calc(
+    var(--moss-sidebar-footer-link-height) + (var(--padding-md) * 2)
+  );
+  --moss-sidebar-footer-min-height: calc(
+    var(--moss-sidebar-footer-links-row-height) + var(--moss-sidebar-user-row-min-height)
+  );
+  --moss-sidebar-footer-collapsed-actions-height: calc(
+    (var(--moss-sidebar-collapsed-control-size) * 2) + var(--gap-md)
+  );
+  --moss-sidebar-footer-collapsed-user-gap: 0px;
+  --moss-sidebar-footer-hidden-shift: var(--padding-xs);
+  --moss-sidebar-user-row-padding: var(--padding-md);
+  --moss-sidebar-user-item-height: var(--height-control-mlg);
+  --moss-sidebar-user-row-min-height: calc(
+    var(--moss-sidebar-user-item-height) + (var(--moss-sidebar-user-row-padding) * 2)
+  );
+  --moss-sidebar-user-collapsed-item-size: var(--height-control-md);
+  --moss-sidebar-user-collapsed-row-height: calc(
+    var(--moss-sidebar-user-collapsed-item-size) + (var(--moss-sidebar-user-row-padding) * 2)
+  );
+  --moss-sidebar-footer-collapsed-min-height: calc(
+    var(--moss-sidebar-footer-collapsed-actions-height) + var(--moss-sidebar-footer-collapsed-user-gap) + var(--moss-sidebar-user-collapsed-row-height)
+  );
+  --moss-sidebar-user-gap: var(--gap-md);
+
+  --moss-main-bg-top: var(--surface-canvas);
+  --moss-main-bg-bottom: var(--surface-canvas);
+  --moss-main-dot-base: var(--dot-base);
+  --moss-main-dot-active: var(--dot-active);
+  --moss-main-mask-strong: var(--mask-strong);
+  --moss-main-mask-medium: var(--mask-medium);
+  --moss-main-mask-soft: var(--mask-soft);
+  --moss-main-mask-faint: var(--mask-faint);
+  --moss-main-content-safe-padding: var(--padding-xxxxl);
+
+  --moss-hero-title: var(--text-primary);
+  --moss-hero-brand: var(--brand-primary);
+
+  --moss-card-bg: var(--surface-base);
+  --moss-card-border: var(--colorBorderSecondary);
+  --moss-card-divider: var(--colorBorderSecondary);
+  --moss-tab-text: var(--colorTextHeading);
+  --moss-tab-active-text: var(--colorText);
+  --moss-tab-active-border: var(--moss-tab-active-text);
+  --moss-prompt-text: var(--colorTextSecondary);
+  --moss-prompt-hover-bg: var(--colorFillQuaternary);
+
+  --moss-input-bg: var(--colorBgContainer);
+  --moss-input-text: var(--colorText);
+  --moss-input-placeholder: var(--color-neutral-light-7);
+  --moss-input-icon: var(--color-neutral-light-7);
+  --moss-input-border: var(--colorBorder);
+  --moss-input-border-hover: var(--color-neutral-light-8);
+  --moss-input-border-focus: var(--color-neutral-light-9);
+  --moss-input-caret: var(--colorTextHeading);
+  --moss-input-radius: var(--radius-md);
+  --moss-input-shadow-focus: 0 0 0 2px color-mix(in srgb, var(--color-neutral-light-9) 15%, transparent);
+
+  /* Button spec aligned with Figma: node 98:90369 */
+  --moss-button-height: var(--height-control-md);
+  --moss-button-radius: var(--radius-sm);
+  --moss-button-padding-inline: var(--padding-lg);
+  --moss-button-gap: var(--gap-sm);
+  --moss-button-font-size: var(--font-size-sm);
+  --moss-button-line-height: var(--line-height-md);
+  --moss-button-font-weight: var(--font-weight-400);
+  --moss-button-disabled-opacity: 1;
+
+  --moss-button-primary-bg: var(--colorPrimary);
+  --moss-button-primary-bg-hover: var(--colorPrimaryHover);
+  --moss-button-primary-bg-active: var(--colorPrimaryActive);
+  --moss-button-primary-text: var(--colorTextWhite);
+
+  --moss-button-secondary-bg: var(--colorFillQuaternary);
+  --moss-button-secondary-bg-hover: var(--colorFillTertiary);
+  --moss-button-secondary-bg-active: var(--colorFillSecondary);
+  --moss-button-secondary-text: var(--colorText);
+
+  --moss-button-outline-bg: transparent;
+  --moss-button-outline-bg-hover: var(--colorFillQuaternary);
+  --moss-button-outline-bg-active: var(--colorFillTertiary);
+  --moss-button-outline-border: var(--colorBorder);
+  --moss-button-outline-border-hover: var(--colorBorderPrimary);
+  --moss-button-outline-text: var(--colorText);
+
+  --moss-button-link-bg: transparent;
+  --moss-button-link-bg-hover: var(--colorBgTextHover);
+  --moss-button-link-bg-active: var(--colorBgTextActive);
+  --moss-button-link-text: var(--colorInfo);
+  --moss-button-link-muted-text: var(--colorTextSecondary);
+
+  --moss-button-disabled-bg: var(--colorFillQuaternary);
+  --moss-button-disabled-border: var(--colorFillQuaternary);
+  --moss-button-disabled-text: var(--colorTextDisabled);
+
+  --moss-composer-bg: var(--surface-base);
+  --moss-composer-border: var(--colorFillTertiary);
+  --moss-composer-border-hover: var(--colorFill);
+  --moss-composer-border-focus: var(--colorFill);
+  --moss-composer-text: var(--colorTextHeading);
+  --moss-composer-placeholder: var(--colorTextDescription);
+  --moss-composer-placeholder-rest: var(--colorTextPlaceholder);
+  --moss-composer-disabled: var(--surface-disabled);
+  --moss-composer-shadow-normal:
+    0 0 0 0.5px rgba(31, 31, 30, 0.15),
+    0 4px 20px rgba(0, 0, 0, 0.04);
+  --moss-composer-shadow-focus:
+    0 0 0 0.5px rgba(31, 31, 30, 0.3),
+    0 4px 20px rgba(0, 0, 0, 0.08);
+  --moss-composer-send-bg: var(--brand-primary);
+  --moss-composer-send-bg-hover: var(--colorPrimaryHover);
+  --moss-composer-send-bg-active: var(--colorPrimaryActive);
+  --moss-composer-send-text: var(--colorWhite);
+  --moss-composer-stop-bg: var(--colorBlack);
+  --moss-composer-stop-bg-hover: var(--colorZero);
+  --moss-composer-stop-text: var(--colorWhite);
+  --moss-composer-upload-bg-hover: var(--colorBgTextNormalHover);
+  --moss-composer-upload-bg-active: var(--colorBgTextNormalActive);
+  --moss-composer-upload-text: var(--colorIconNormal);
+  --moss-composer-upload-text-hover: var(--colorIconActive);
+  --moss-composer-upload-menu-bg: var(--colorBgElevated);
+  --moss-composer-upload-menu-radius: var(--radius-lg);
+  --moss-composer-upload-menu-shadow: var(--shadow-secondary);
+  --moss-composer-upload-menu-width: 130px;
+  --moss-composer-upload-menu-padding: var(--padding-xs);
+  --moss-composer-upload-tooltip-bg: var(--colorBgSpotlight);
+  --moss-composer-upload-tooltip-text: var(--colorWhite);
+  --moss-composer-file-tag-bg: var(--color-shadow-alpha-2);
+  --moss-composer-file-tag-bg-hover: rgba(11, 11, 11, 0.12);
+  --moss-composer-file-tag-progress-fill: var(--colorFillQuaternary);
+  --moss-composer-file-tag-text: var(--colorTextSecondary);
+  --moss-composer-file-tag-size-text: var(--colorTextPlaceholder);
+  --moss-composer-file-tag-radius: var(--radius-md);
+  --moss-composer-file-tag-min-width: 180px;
+  --moss-composer-file-tag-max-width: 240px;
+  --moss-composer-file-tag-min-height: 56px;
+  --moss-composer-file-tag-icon-size: var(--height-control-md);
+  --moss-composer-file-tag-remove-size: var(--height-control-xs);
+  --moss-composer-file-tag-progress-bg: linear-gradient(
+    90deg,
+    var(--moss-composer-file-tag-bg-hover) 0%,
+    var(--moss-composer-file-tag-bg-hover) 59%,
+    var(--moss-composer-file-tag-bg) 59%,
+    var(--moss-composer-file-tag-bg) 100%
+  );
+  --moss-composer-file-tag-height: 30px;
+  --moss-composer-reference-bg: var(--colorInfoBg);
+  --moss-composer-reference-text: var(--colorInfo);
+  --moss-composer-reference-radius: var(--radius-sm);
+  --moss-file-mention-panel-width: 400px;
+  --moss-file-mention-panel-max-height: 450px;
+  --moss-file-mention-panel-bg: var(--colorBgElevated);
+  --moss-file-mention-panel-radius: var(--radius-md);
+  --moss-file-mention-panel-shadow: var(--shadow-secondary);
+  --moss-file-mention-item-height: 36px;
+  --moss-file-mention-item-hover-bg: var(--colorFillQuaternary);
+  --moss-file-mention-divider: var(--colorBorderSecondary);
+  --moss-file-mention-title: var(--colorTextPlaceholder);
+  --moss-file-mention-text: var(--colorTextSecondary);
+
+  --moss-sent-bg: var(--surface-brand-ghost);
+  --moss-sent-border: var(--border-brand-soft);
+  --moss-sent-text: var(--text-secondary);
+
+  --moss-files-panel-width: 396px;
+  --moss-files-panel-inset: var(--padding-md);
+  --moss-files-panel-resizer-hit-width: var(--spacing-4xl);
+  --moss-files-panel-resizer-hit-offset: var(--padding-xxxl);
+  --moss-files-panel-resizer-line-width: 1px;
+  --moss-files-panel-resizer-color: var(--color-neutral-alpha-light-6);
+  --moss-files-panel-bg: var(--colorBgContainer);
+  --moss-files-panel-border: var(--colorFillQuaternary);
+  --moss-files-panel-divider: var(--colorBorderSecondary);
+  --moss-files-panel-shadow: var(--shadow-subtle);
+  --moss-files-panel-radius: var(--radius-sm);
+  --moss-files-panel-header-height: 56px;
+  --moss-files-panel-card-min-width: 180px;
+  --moss-files-panel-card-max-width: 320px;
+  --moss-files-panel-card-preview-height: 120px;
+  --moss-files-panel-card-height: calc(
+    (var(--padding-xs) * 2) +
+    var(--moss-files-panel-card-preview-height) +
+    var(--padding-lg) +
+    var(--line-height-md) +
+    var(--gap-xs) +
+    var(--line-height-sm) +
+    var(--padding-md)
+  );
+  --moss-files-panel-card-preview-bg: rgba(11, 11, 11, 0.03);
+}

@@ -1,0 +1,179 @@
+:root {
+  /* Brand */
+  --colorPrimary: #0B0B0B;
+  --colorPrimaryActive: #0B0B0B;
+  --colorPrimaryHover: #383835;
+  --colorPrimaryBg: rgba(11, 11, 11, 0.05);
+  --colorPrimaryBgActive: rgba(11, 11, 11, 0.2);
+  --colorPrimaryBgHover: rgba(11, 11, 11, 0.1);
+  --colorPrimaryBorder: var(--color-brand-light-3);
+  --colorPrimaryBorderHover: var(--color-brand-light-4);
+  --colorPrimaryText: var(--color-brand-light-6);
+  --colorPrimaryTextActive: var(--color-brand-light-7);
+  --colorPrimaryTextHover: var(--color-brand-light-5);
+  --colorControlOutline: rgba(11, 11, 11, 0.15);
+
+  /* Success */
+  --colorSuccess: var(--color-green-light-6);
+  --colorSuccessActive: var(--color-green-light-7);
+  --colorSuccessHover: var(--color-green-light-4);
+  --colorSuccessBg: var(--color-green-light-1);
+  --colorSuccessBgHover: var(--color-green-light-2);
+  --colorSuccessBorder: var(--color-green-light-3);
+  --colorSuccessBorderHover: var(--color-green-light-4);
+  --colorSuccessText: var(--color-green-light-6);
+  --colorSuccessTextActive: var(--color-green-light-7);
+  --colorSuccessTextHover: var(--color-green-light-5);
+
+  /* Warning */
+  --colorWarning: var(--color-yellow-light-6);
+  --colorWarningActive: var(--color-yellow-light-7);
+  --colorWarningHover: var(--color-yellow-light-4);
+  --colorWarningBg: var(--color-yellow-light-1);
+  --colorWarningBgHover: var(--color-yellow-light-2);
+  --colorWarningBorder: var(--color-yellow-light-3);
+  --colorWarningBorderHover: var(--color-yellow-light-4);
+  --colorWarningText: var(--color-yellow-light-6);
+  --colorWarningTextActive: var(--color-yellow-light-7);
+  --colorWarningTextHover: var(--color-yellow-light-5);
+  --colorControlWarningOutline: rgba(245, 169, 39, 0.1);
+
+  /* Error */
+  --colorError: var(--color-red-light-6);
+  --colorErrorActive: var(--color-red-light-7);
+  --colorErrorHover: var(--color-red-light-5);
+  --colorErrorBg: var(--color-red-light-1);
+  --colorErrorBgActive: var(--color-red-light-3);
+  --colorErrorBgHover: var(--color-red-light-2);
+  --colorErrorBorder: var(--color-red-light-3);
+  --colorErrorBorderHover: var(--color-red-light-4);
+  --colorErrorText: var(--color-red-light-6);
+  --colorErrorTextActive: var(--color-red-light-7);
+  --colorErrorTextHover: var(--color-red-light-5);
+  --colorControlErrorOutline: rgba(239, 86, 85, 0.12);
+
+  /* Info */
+  --colorInfo: var(--color-blue-light-6);
+  --colorInfoActive: var(--color-blue-light-7);
+  --colorInfoHover: var(--color-blue-light-4);
+  --colorInfoBg: var(--color-blue-light-1);
+  --colorInfoBgHover: var(--color-blue-light-2);
+  --colorInfoBorder: var(--color-blue-light-3);
+  --colorInfoBorderHover: var(--color-blue-light-4);
+  --colorInfoText: var(--color-blue-light-6);
+  --colorInfoTextActive: var(--color-blue-light-7);
+  --colorInfoTextHover: var(--color-blue-light-5);
+
+  /* Neutral */
+  --colorZero: var(--color-black-alpha-light-13);
+  --colorWhite: var(--color-neutral-light-0);
+  --colorWhiteFixation: #FFFFFF;
+  --colorBlack: var(--color-neutral-light-12);
+  --colorText: var(--color-black-alpha-light-1);
+  --colorTextSecondary: var(--color-black-alpha-light-3);
+  --colorTextTertiary: var(--color-black-alpha-light-4);
+  --colorTextQuaternary: var(--color-black-alpha-light-6);
+  --colorTextPlaceholder: var(--colorTextQuaternary);
+  --colorTextDescription: var(--colorTextTertiary);
+  --colorTextDisabled: var(--color-black-alpha-light-8);
+  --colorTextDataDisabled: var(--colorTextDisabled);
+  --colorTextHeading: var(--colorText);
+  --colorTextWhite: var(--colorWhite);
+  --colorTextWhiteFixation: var(--colorWhiteFixation);
+  --colorTextLabel: var(--colorTextSecondary);
+  --colorIcon: var(--colorTextTertiary);
+  --colorIconHover: var(--colorTextSecondary);
+  --colorIconActive: var(--colorText);
+  --colorIconNormal: var(--colorTextSecondary);
+  --colorIconDisabled: var(--color-black-alpha-light-9);
+  --colorBorderPrimary: rgba(11, 11, 11, 0.4);
+  --colorBorder: rgba(11, 11, 11, 0.3);
+  --colorBorderSecondary: rgba(11, 11, 11, 0.2);
+  --colorBorderTertiary: rgba(11, 11, 11, 0.1);
+  --colorSplit: var(--colorBorderSecondary);
+  --colorSplitWhite: var(--color-white-alpha-light-3);
+  --colorFill: var(--color-black-alpha-light-8);
+  --colorFillSecondary: var(--color-black-alpha-light-9);
+  --colorFillTertiary: var(--color-black-alpha-light-11);
+  --colorFillQuaternary: var(--color-black-alpha-light-12);
+  --colorBgContainer: var(--colorWhite);
+  --colorBgContainerSecondary: var(--color-white-alpha-light-4);
+  --colorBgContainerTertiary: var(--color-white-alpha-light-6);
+  --colorBgContainerGrey: var(--color-neutral-light-1);
+  --colorBgContainerGreySecondary: var(--color-neutral-light-2);
+  --colorBgContainerGreyTertiary: var(--color-neutral-light-3);
+  --colorBgContainerDisabled: var(--colorFillQuaternary);
+  --colorBgElevated: var(--colorWhite);
+  --colorBgElevaterFixation: var(--colorWhiteFixation);
+  --colorBgSpotlight: var(--color-neutral-light-10);
+  --colorBgShape: var(--color-black-alpha-light-10);
+  --colorBgMaskWhite: var(--color-white-alpha-light-4);
+
+  /* Foundation aliases from Moss */
+  --colorFillAlter: var(--colorFillQuaternary);
+  --colorFillContent: var(--colorFillSecondary);
+  --colorBgTextNormalHover: var(--colorFillQuaternary);
+  --colorBgTextNormalActive: var(--colorFillTertiary);
+  --colorBgTextHover: rgba(11, 11, 11, 0.05);
+  --colorBgTextActive: rgba(11, 11, 11, 0.1);
+  --colorBgTextErrorHover: var(--color-red-light-1);
+  --colorBgTextErrorActive: var(--color-red-light-2);
+  --controlItemBgActive: var(--colorPrimaryBg);
+  --controlItemBgActiveHover: var(--colorPrimaryBgHover);
+  --controlItemBgActiveDisabled: var(--colorFillSecondary);
+  --controlItemTextActive: var(--colorText);
+
+  /* Backward-compatible aliases for current project */
+  --brand-primary: var(--colorPrimary);
+  --brand-primary-soft: var(--colorPrimaryBg);
+  --brand-primary-muted: var(--colorPrimaryBgHover);
+  --brand-primary-ghost: var(--colorPrimaryBg);
+  --brand-border-soft: var(--colorPrimaryBorder);
+
+  --text-primary: var(--colorText);
+  --text-secondary: var(--colorTextSecondary);
+  --text-tertiary: var(--colorTextTertiary);
+  --text-muted: var(--colorTextDescription);
+
+  --icon-default: var(--colorIconNormal);
+  --icon-strong: var(--colorIconActive);
+  --icon-accent: var(--colorControlOutline);
+
+  --surface-base: var(--colorBgContainer);
+  --surface-canvas: var(--colorBgContainerGrey);
+  --surface-subtle: var(--colorBgContainerGreySecondary);
+  --surface-soft: var(--colorBgContainerGreyTertiary);
+  --surface-hover: var(--colorBgContainerGreySecondary);
+  --surface-info: var(--colorInfoBg);
+  --surface-brand-soft: var(--colorPrimaryBg);
+  --surface-brand-muted: var(--colorPrimaryBgHover);
+  --surface-brand-ghost: var(--colorPrimaryBg);
+  --surface-disabled: var(--colorBgContainerDisabled);
+
+  --border-subtle: var(--colorSplit);
+  --border-muted: var(--colorSplit);
+  --border-regular: var(--colorSplit);
+  --border-brand-soft: var(--colorPrimaryBorder);
+
+  --shadow-line: var(--colorBgShape);
+  --shadow-soft: rgba(11, 11, 11, 0.06);
+
+  --dot-base: color-mix(in srgb, var(--color-neutral-light-3) 86%, transparent);
+  --dot-active: color-mix(in srgb, var(--color-neutral-light-6) 52%, transparent);
+  --mask-strong: var(--color-neutral-alpha-light-11);
+  --mask-medium: color-mix(in srgb, var(--color-neutral-light-11) 64%, transparent);
+  --mask-soft: color-mix(in srgb, var(--color-neutral-light-11) 26%, transparent);
+  --mask-faint: color-mix(in srgb, var(--color-neutral-light-11) 16%, transparent);
+
+  --clay-strong: var(--brand-primary);
+  --clay-soft: var(--brand-primary-soft);
+  --ink-900: var(--text-primary);
+  --ink-700: var(--text-secondary);
+  --ink-500: var(--text-tertiary);
+  --line-200: var(--border-muted);
+  --line-300: var(--border-regular);
+  --paper-000: var(--surface-base);
+  --paper-010: var(--surface-canvas);
+  --paper-040: var(--surface-subtle);
+  --paper-050: var(--surface-subtle);
+}
