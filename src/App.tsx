@@ -6,6 +6,7 @@ import {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
+  UIEvent as ReactUIEvent,
   useEffect,
   useMemo,
   useRef,
@@ -13,13 +14,35 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { DEFAULT_FILE_MARKDOWN, INITIAL_FILE_MARKDOWN } from "./data/fileContents";
-import fileMdIcon from "./assets/file-md.png";
-import filePanelIcon from "./assets/file-md-title.png";
-import filePdfIcon from "./assets/file-pdf.png";
-import fileWordIcon from "./assets/file-word.png";
+import fileCoverArchiveIcon from "./assets/文件封面_zip.png";
+import fileCoverDocIcon from "./assets/文件封面_doc.png";
+import fileCoverHtmlIcon from "./assets/文件封面_html.png";
+import fileCoverImageIcon from "./assets/文件封面_pic.png";
+import fileCoverMdIcon from "./assets/文件封面_md.png";
+import fileCoverPdfIcon from "./assets/文件封面_pdf.png";
+import fileCoverPptIcon from "./assets/文件封面_ppt.png";
+import fileCoverVideoIcon from "./assets/文件封面_video.png";
+import fileCoverXlsIcon from "./assets/文件封面_xls.png";
+import uploadFileArchiveIcon from "./assets/上传文件_zip.png";
+import uploadFileDocIcon from "./assets/上传文件_doc.png";
+import uploadFileHtmlIcon from "./assets/上传文件_html.png";
+import uploadFileImageIcon from "./assets/上传文件_pic.png";
+import uploadFileMdIcon from "./assets/上传文件_md.png";
+import uploadFilePdfIcon from "./assets/上传文件_pdf.png";
+import uploadFilePptIcon from "./assets/上传文件_ppt.png";
+import uploadFileVideoIcon from "./assets/上传文件_video.png";
+import uploadFileXlsIcon from "./assets/上传文件_xls.png";
+import resolutionPartialSelectedIcon from "./assets/满意度_部分解决_选中.png";
+import resolutionResolvedSelectedIcon from "./assets/满意度_已解决_选中.png";
+import resolutionUnresolvedSelectedIcon from "./assets/满意度_未解决_选中.png";
+import myFilesColorIcon from "./assets/my-files-color.png";
+import source21stIcon from "./assets/source-21st.png";
+import sourceBaiduIcon from "./assets/source-baidu.png";
+import sourceBingIcon from "./assets/source-bing.png";
+import sourceHuabanIcon from "./assets/source-huaban.png";
 import userAvatar from "./assets/user-avatar.jpg";
 
-type TabKey = "portrait" | "company" | "finance" | "news" | "people";
+type TabKey = "portrait" | "company" | "finance" | "news" | "people" | "market";
 
 type PromptMap = Record<TabKey, string[]>;
 type HistoryCategory = "today" | "yesterday" | "earlier";
@@ -27,6 +50,7 @@ type HistoryGroupKey = "favorites" | HistoryCategory;
 type HistorySession = {
   id: string;
   title: string;
+  question?: string;
   createdAt: string;
   updatedAt: string;
   isFavorite: boolean;
@@ -36,6 +60,10 @@ type HistoryMenuState = {
   sessionId: string;
   left: number;
   top: number;
+} | null;
+type HistoryRenameState = {
+  sessionId: string;
+  value: string;
 } | null;
 type CollapsedPopoverType = "agent" | "favorites" | "history";
 type CollapsedTooltipState = {
@@ -83,6 +111,24 @@ type FileItem = {
   size: string;
   icon: string;
 };
+type ConversationRun = {
+  id: string;
+  question: string;
+  createdAt: string;
+  completedAt?: string;
+  conclusionMarkdown: string;
+  conclusionVisibleLength: number;
+  stage: "thinking" | "processing" | "done";
+  visibleSteps: number;
+  responseStarted: boolean;
+  isThinkingExpanded: boolean;
+  isStopped?: boolean;
+  actionVariant: "feedback" | "resolution";
+};
+type AnswerFeedback = "liked" | "disliked" | null;
+type AnswerResolutionFeedback = "resolved" | "partial" | "unresolved" | null;
+type ResolutionPopconfirmValue = Extract<AnswerResolutionFeedback, "partial" | "unresolved">;
+type ResolutionPopconfirmPlacement = "top" | "bottom";
 
 const COMPOSER_REFERENCE_START = "\u2063";
 const COMPOSER_REFERENCE_END = "\u2064";
@@ -99,6 +145,19 @@ const TABS: TabOption[] = [
   { key: "finance", label: "公司信息查询" },
   { key: "news", label: "上市公司财务" },
   { key: "people", label: "关键人物洞察" }
+];
+const CUSTOMER_INSIGHT_TABS: TabOption[] = [...TABS, { key: "market", label: "公司与市场洞察" }];
+const RISK_MANAGEMENT_TABS: TabOption[] = [
+  { key: "portrait", label: "通用风险尽调" },
+  { key: "company", label: "客户合作风险" },
+  { key: "finance", label: "供应商风险评估" },
+  { key: "news", label: "风险监控与预警" }
+];
+const PUBLIC_OPINION_TABS: TabOption[] = [
+  { key: "portrait", label: "品牌健康监控" },
+  { key: "company", label: "危机识别与相应" },
+  { key: "finance", label: "竞品与行业洞察" },
+  { key: "news", label: "公关发声与简报" }
 ];
 
 const PROMPTS: PromptMap = {
@@ -136,28 +195,109 @@ const PROMPTS: PromptMap = {
     "请给出【公司】管理层画像：背景、分工、关注点，以及可能影响采购决策的因素",
     "如果要接触【公司】，请判断优先沟通哪些角色最有效，并说明原因",
     "请结合公开任职、采访和组织信息，总结【公司】核心人物的经营风格与决策倾向"
+  ],
+  market: [
+    "请从公司基本面与市场趋势两个维度，判断【公司】未来12个月的增长机会",
+    "结合行业竞争、客户结构和产品能力，分析【公司】当前的市场位置",
+    "请梳理【公司】所在市场的需求变化，并指出最值得关注的商业机会",
+    "从公开信息判断，【公司】与主要竞争对手相比有哪些优势和短板",
+    "请给我一份【公司】的公司与市场洞察速读，重点突出机会、风险和建议动作"
+  ]
+};
+const RISK_MANAGEMENT_PROMPTS: Partial<PromptMap> = {
+  portrait: [
+    "帮我看看华为技术有限公司的整体经营风险，特别是供应链稳定性。",
+    "分析一下阿里云的合规风险，重点看数据安全与隐私保护方面。",
+    "腾讯云计算有限责任公司的股权穿透结构复杂吗？有无实控人变更风险？"
+  ]
+};
+const OPPORTUNITY_MINING_PROMPTS: Partial<PromptMap> = {
+  portrait: [
+    "检索帆软过去24小时是否有“软件崩溃”、“数据泄露”或“售后推诿”等高敏感投诉，重点标记KOL发声。",
+    "针对近期FineReport版本更新后的用户反馈，精读是否存在“兼容性问题”或“Bug频发”的攻击论点并分级。",
+    "将帆软过去半年的服务类危机事件整理成PPT复盘报告，包含响应时效、舆情峰值曲线及改进建议。"
   ]
 };
 
-const AGENTS = ["客户洞察", "风险管理", "商机挖掘"] as const;
+const AGENTS = ["客户洞察", "风险管理", "舆情监控"] as const;
 type AgentKey = (typeof AGENTS)[number];
 type AgentHistoryMap = Record<AgentKey, HistorySession[]>;
 
 const INITIAL_FILES: FileItem[] = [
-  { name: "市场调研报告.doc", size: "10.3 KB", icon: fileWordIcon },
-  { name: "市场调研报告.md", size: "10.3 KB", icon: fileMdIcon },
-  { name: "市场调研报告.pdf", size: "10.3 KB", icon: filePdfIcon }
+  { name: "市场调研报告.doc", size: "10.3 KB", icon: getFileCoverIcon("市场调研报告.doc") },
+  {
+    name: "国内金融行业商业智能软件市场调研报告.md",
+    size: "10.3 KB",
+    icon: getFileCoverIcon("国内金融行业商业智能软件市场调研报告.md")
+  },
+  { name: "华为技术有限公司风险洞察报告.pdf", size: "10.3 KB", icon: getFileCoverIcon("华为技术有限公司风险洞察报告.pdf") }
 ];
 
 const ONE_DAY_IN_MS = 24 * 60 * 60 * 1000;
 const SIDEBAR_AUTO_COLLAPSE_BREAKPOINT = 1080;
 const FILES_PANEL_DEFAULT_WIDTH = 396;
+const FILES_PANEL_CONVERSATION_WIDTH = 510;
 const FILES_PANEL_MIN_WIDTH = 320;
 const FILES_PANEL_MAX_WIDTH = 640;
 const FILES_PANEL_INSET = 8;
 const FILES_PANEL_MIN_MAIN_WIDTH = 360;
 const FILES_PANEL_RESIZE_STEP = 24;
 const FILE_CARD_MENU_WIDTH = 112;
+const CONCLUSION_STREAM_MIN_CHUNK_SIZE = 3;
+const CONCLUSION_STREAM_MAX_CHUNK_SIZE = 9;
+const CHAT_BOTTOM_THRESHOLD = 24;
+const THINKING_CHAIN_STEPS = [
+  "阅读 \"skills/customer-insight/SKILL.md\"",
+  "MOSS-企业分支机构",
+  "MOSS-AI搜索：帆软软件",
+  "搜索网络：帆软软件",
+  "加载设计规范",
+  "绘制“帆软软件股权结构”"
+];
+const DEFAULT_FOLLOW_UP_QUESTIONS = [
+  "继续拆解关键部门与负责人，生成下一步拜访清单",
+  "对比同类客户的成功案例，寻找可复用切入点",
+  "生成一份面向销售推进的行动计划与话术"
+];
+const DISLIKE_FEEDBACK_OPTIONS = ["不够直接", "答非所问", "不知所云", "鸡同鸭讲", "其他其他"];
+const INTERNAL_SOURCE_GROUPS = [
+  {
+    title: "Moss商业智能库",
+    items: ["MOSS企业股权信息库", "MOSS************库"]
+  }
+];
+const EXTERNAL_SOURCES = [
+  {
+    domain: "www.baidu.com",
+    title: "帆软软件经营信息与客户行业分布概览",
+    summary: "公开信息显示，帆软长期服务制造、零售、金融、地产等行业客户，并围绕BI与报表场景沉淀解决方案。",
+    icon: sourceBaiduIcon
+  },
+  {
+    domain: "www.bing.com",
+    title: "帆软商业智能产品能力与典型应用场景",
+    summary: "资料提到FineBI、FineReport等产品覆盖自助分析、可视化看板和经营管理报表，适配多部门协同分析。",
+    icon: sourceBingIcon
+  },
+  {
+    domain: "huaban.com/discovery",
+    title: "企业数字化转型中的数据治理与分析需求",
+    summary: "相关案例显示，集团型客户通常关注指标统一、权限治理、看板复用以及业务人员自主分析能力建设。",
+    icon: sourceHuabanIcon
+  },
+  {
+    domain: "www.bing.com",
+    title: "BI采购决策链与销售切入路径参考",
+    summary: "信息源指向CIO、数据负责人和业务部门共同参与评估，试点验证与标杆复制是常见推进方式。",
+    icon: sourceBingIcon
+  },
+  {
+    domain: "https://21st.dev/home",
+    title: "交互与组件动效设计参考",
+    summary: "页面交互参考侧边抽屉、弱蒙版、来源卡片与分组展示模式，用于提升结果可追溯信息的阅读效率。",
+    icon: source21stIcon
+  }
+];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -182,10 +322,27 @@ function createSession(
   return {
     id,
     title,
+    question: title,
     createdAt: timestamp,
     updatedAt: timestamp,
     isFavorite
   };
+}
+
+function getHistorySessionQuestion(session: HistorySession) {
+  return session.question ?? session.title;
+}
+
+function getStableActionVariant(seed: string): ConversationRun["actionVariant"] {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return hash % 2 === 0 ? "resolution" : "feedback";
+}
+
+function createActionVariant(): ConversationRun["actionVariant"] {
+  return Math.random() < 0.5 ? "resolution" : "feedback";
 }
 
 function deriveHistoryCategory(timestamp: string): HistoryCategory {
@@ -202,6 +359,185 @@ function deriveHistoryCategory(timestamp: string): HistoryCategory {
 
 function buildSessionTitle(text: string) {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function buildConversationHeaderTitle(text: string) {
+  const normalized = buildSessionTitle(text);
+  if (!normalized) return "新会话";
+
+  let compact = normalized
+    .replace(/^(我想|请|帮我|麻烦|想请你|请你)/, "")
+    .replace(/从[^，,。！？!?；;]{1,24}视角/g, "")
+    .replace(/给我一份[^，,。！？!?；;]{1,24}/g, "")
+    .replace(/重点[说讲]说?/, "")
+    .replace(/他们的|它的/g, "")
+    .replace(/^[,，、\s]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!compact) compact = normalized;
+
+  const sentence = compact.split(/[。！？!?]/).find(Boolean)?.trim() ?? compact;
+  const parts = sentence
+    .split(/[，,；;：:]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  let title = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : (parts[0] ?? sentence);
+  title = title.replace(/\s+/g, " ").trim();
+
+  const maxLen = 28;
+  if (title.length > maxLen) {
+    return `${title.slice(0, maxLen)}…`;
+  }
+  return title;
+}
+
+function formatRunElapsedSeconds(run: ConversationRun) {
+  const startedAt = new Date(run.createdAt).getTime();
+  const finishedAt = new Date(run.completedAt ?? run.createdAt).getTime();
+  const elapsedInSeconds = Math.max(0, (finishedAt - startedAt) / 1000);
+  return Number(elapsedInSeconds.toFixed(1)).toString();
+}
+
+function buildConversationConclusionMarkdown(agent: AgentKey, question: string) {
+  const normalizedQuestion = buildSessionTitle(question).replace(/[。！？!?]+$/, "");
+  if (agent === "客户洞察" && /华润集团|华润/.test(normalizedQuestion)) {
+    return `# 华润集团销售拓客速读
+
+**一句话判断**：华润集团是多元化央企巨头，数字化转型已进入深水区，"智慧华润"战略下各板块数据能力参差不齐，**帆软可从板块级渗透切入，重点瞄准华润啤酒这类已具备数据基础但自主分析能力待提升的板块**。
+
+---
+
+## 一、客户画像关键信息
+
+| 维度 | 关键事实 |
+|------|----------|
+| **规模体量** | 香港央企，业务遍及大消费、综合能源、城市建设运营、大健康、产业金融、科技及新兴产业6大领域，25个一级利润中心，6家香港上市公司 |
+| **数字化组织** | 2021年成立**华润数科**作为数字化转型主力，承接"智慧华润"愿景；自建华润云平台，布局数据中台+业务中台架构 |
+| **战略节奏** | 十四五期间全面推进数字化转型，目标"各产业板块全面数字化、数据资产初步变现" |
+| **典型板块** | 华润啤酒（雪花全球销量第一，国内市占率超30%）、华润置地（地产龙头）、华润电力（新能源装机4159万千瓦）、华润微电子（半导体IDM龙头） |
+
+---
+
+## 二、数字化转型痛点（来自一线调研）
+
+**痛点1：多业态数据孤岛严重**
+- 集团横跨零售、啤酒、电力、地产、医药、金融等25个板块，各业务系统独立建设
+- 华润啤酒案例显示：历经"报表→看板→自主分析"三阶段迭代，仍面临**用户操作能力不足、看板管理混乱、模式可持续性待验证**
+
+**痛点2：自建平台能力与业务需求有差距**
+- 华润云/华润数科侧重基础设施，但一线业务场景的**报表开发能力、自助分析易用性**仍有瓶颈
+- 华润啤酒引入ChatBI智能问数工具，表明对**降低分析门槛的AI化工具**有明显需求
+
+**痛点3：分析人才断层**
+- 华润啤酒实践显示：团队"正向全民数据科学家目标迈进"，但**业务人员自主分析能力不足**是核心障碍
+- 培训与工具推广模式虽成熟，但"让普通员工具备专家级分析能力"仍需外部赋能
+
+---
+
+## 三、数据治理现状（来自华润啤酒标杆实践）
+
+**已具备的基础**：
+- 数仓覆盖营销、营运、财务等多领域
+- 指标与数据集实现标准化管理
+- 平台支撑**上万用户查询、BI赋能超千人**
+
+**当前阶段**：
+- 数据能力处于**资产化与业务化并行阶段**
+- 分析能力已完成自主分析推广，2025年启动智能分析与预算模型探索
+
+**待补强的缺口**：
+- 看板管理混乱、缺乏统一治理框架
+- 用户培训后仍难独立完成复杂分析
+- AI智能分析预测功能待完善
+
+---
+
+## 四、帆软切入机会点
+
+| 切入角度 | 机会分析 | 推荐动作 |
+|----------|----------|----------|
+| **板块级渗透** | 华润啤酒已搭建数仓基础但自主分析有瓶颈，是帆软FineBI自助分析的典型场景；华润置地、华润电力等同样存在报表复杂、数据分散问题 | 先攻克华润啤酒或华润置地一个标杆，用案例撬动其他板块 |
+| **补充华润数科能力** | 华润数科侧重基础设施，帆软可在报表工具层、自助分析层形成互补，作为"华润云生态合作伙伴"入场 | 探索与华润数科的合作模式，切入华润云数字化平台生态 |
+| **AI智能分析需求** | 华润啤酒已引入ChatBI，表明对AI降低分析门槛的需求明确；帆软FineBI的AI分析能力可精准对位 | 强调帆软AI分析能力，与华润啤酒ChatBI形成互补或升级方案 |
+| **培训赋能缺口** | 华润啤酒培训体系成熟但用户仍难独立分析，帆软"人人都是数据分析师"理念+成熟培训体系可补位 | 提供培训赋能服务，从"工具+培训"组合拳切入 |
+
+---
+
+## 五、销售推进建议
+
+**优先级判断**：华润啤酒 > 华润置地 > 华润电力 > 华润微电子
+
+**理由**：
+- 华润啤酒公开案例显示其**数据应用实践最成熟、痛点最清晰**，已从报表迭代到自主分析阶段，是帆软产品能力的精准匹配点
+- 华润置地地产属性强，复杂报表、营销费用管控、应收账款监管等场景多，与帆软文旅地产方案高度契合
+- 华润电力、华润微电子偏工业制造，工业互联网场景更多，需结合华润数科Resolink平台策略
+
+**关键联系人方向**：
+- 华润啤酒：数据应用团队/智慧雪花中心项目组（公开案例显示有明确负责人）
+- 华润数科：政企数字化服务业务线（探索生态合作）
+- 各板块CIO/数据负责人（需进一步定向）
+
+---
+
+**风险提示**：华润数科作为集团数字化主力，有自建BI能力的倾向；帆软需明确"工具层补充"定位，避免正面竞争，强调生态协同而非替代。`;
+  }
+
+  const reportTitle = agent === "风险管理" ? "企业风险管理速读" : agent === "舆情监控" ? "舆情监控速读" : "销售拓客速读";
+  const oneLine =
+    agent === "风险管理"
+      ? "一句话判断：当前问题可优先从合规、运营、舆情三条风险线并行拆解，先识别高风险暴露，再推进可执行缓释动作。"
+      : agent === "舆情监控"
+        ? "一句话判断：当前问题适合用“板块优先级+场景切入点+关键联系人”三段式推进，先做标杆再做复制。"
+        : "一句话判断：该问题可从客户画像、转型痛点、数据治理与切入机会四层展开，先形成可验证场景，再放大复制。";
+
+  return `# ${reportTitle}
+${oneLine}
+
+---
+
+## 一、问题聚焦
+${normalizedQuestion}
+
+### 关键事实表
+| 维度 | 关键事实 |
+| --- | --- |
+| 业务背景 | 当前问题聚焦在组织转型与数据能力提升，目标是找到可落地的推进抓手 |
+| 数据现状 | 现有数据能力具备基础，但跨系统协同、分析效率与治理机制仍有提升空间 |
+| 组织条件 | 业务与数据角色已具备协同基础，适合先做小范围试点再逐步扩面 |
+
+---
+
+## 二、核心洞察
+### 洞察1：问题拆解应先定优先级
+- 先从影响范围与落地成本两个维度排序，避免并行推进导致资源分散。
+- 建议优先处理“高影响、可快速落地”的问题项，形成阶段性成果。
+
+### 洞察2：能力建设需要场景牵引
+- 仅做平台建设难以持续见效，需要绑定业务场景验证价值。
+- 建议通过示范场景沉淀方法，再复制到相邻业务单元。
+
+### 洞察3：治理与执行要同步推进
+- 指标口径、看板管理、权限机制应与执行节奏同步设计。
+- 建议建立周度复盘机制，确保方案迭代可追踪。
+
+---
+
+## 三、建议动作
+### 优先级判断
+高优先：明确目标指标与评估口径  
+中优先：搭建场景化分析方案并完成试点  
+持续项：沉淀治理规范与推广机制
+
+### 落地路径
+1. 2周内完成问题清单与优先级排序，统一评估标准。
+2. 4周内完成1个重点场景试点，输出量化结果。
+3. 8周内形成可复制模板，推动跨团队复用。
+
+### 风险提示
+- 若缺少统一口径，结论会出现偏差，影响后续决策准确性。
+- 若试点范围过大，执行效率会下降，难以形成正向反馈。`;
 }
 
 function getComposerPlainText(text: string, files: ComposerFileAttachment[]) {
@@ -232,11 +568,91 @@ function getComposerReferenceAtCursor(text: string, cursor: number, mode: "backs
   return null;
 }
 
-function getFileIcon(fileName: string) {
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getComposerReferenceNames(text: string) {
+  const names = new Set<string>();
+  text.replace(COMPOSER_REFERENCE_PATTERN, (_match, name: string) => {
+    names.add(name);
+    return _match;
+  });
+  return names;
+}
+
+function removeComposerReferenceFromText(text: string, fileName: string) {
+  return text.replace(
+    new RegExp(`${COMPOSER_REFERENCE_START}${escapeRegExp(fileName)}${COMPOSER_REFERENCE_END}`, "g"),
+    ""
+  );
+}
+
+function getFileType(fileName: string) {
   const extension = fileName.split(".").pop()?.toLowerCase();
-  if (extension === "pdf") return filePdfIcon;
-  if (["css", "html", "js", "json", "jsx", "md", "ts", "tsx"].includes(extension ?? "")) return fileMdIcon;
-  return fileWordIcon;
+  if (["doc", "docx"].includes(extension ?? "")) return "doc";
+  if (["md", "markdown"].includes(extension ?? "")) return "md";
+  if (extension === "pdf") return "pdf";
+  if (["html", "htm", "css", "js", "jsx", "ts", "tsx", "json", "txt", "text"].includes(extension ?? "")) return "html";
+  if (["ppt", "pptx"].includes(extension ?? "")) return "ppt";
+  if (["xls", "xlsx", "csv"].includes(extension ?? "")) return "xls";
+  if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(extension ?? "")) return "archive";
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tif", "tiff"].includes(extension ?? "")) return "image";
+  if (["mp4", "mov", "avi", "mkv", "webm", "wmv", "flv"].includes(extension ?? "")) return "video";
+  return "doc";
+}
+
+function getFileCoverIcon(fileName: string) {
+  const fileType = getFileType(fileName);
+  const iconMap = {
+    archive: fileCoverArchiveIcon,
+    doc: fileCoverDocIcon,
+    html: fileCoverHtmlIcon,
+    image: fileCoverImageIcon,
+    md: fileCoverMdIcon,
+    pdf: fileCoverPdfIcon,
+    ppt: fileCoverPptIcon,
+    video: fileCoverVideoIcon,
+    xls: fileCoverXlsIcon
+  };
+
+  return iconMap[fileType];
+}
+
+function getUploadFileIcon(fileName: string) {
+  const fileType = getFileType(fileName);
+  const iconMap = {
+    archive: uploadFileArchiveIcon,
+    doc: uploadFileDocIcon,
+    html: uploadFileHtmlIcon,
+    image: uploadFileImageIcon,
+    md: uploadFileMdIcon,
+    pdf: uploadFilePdfIcon,
+    ppt: uploadFilePptIcon,
+    video: uploadFileVideoIcon,
+    xls: uploadFileXlsIcon
+  };
+
+  return iconMap[fileType];
+}
+
+function isFileEditable(fileName: string) {
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  return ["md", "markdown", "txt", "text", "csv", "html", "htm", "css", "js", "jsx", "ts", "tsx", "json"].includes(
+    extension ?? ""
+  );
+}
+
+function getFileMimeType(fileName: string) {
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "doc") return "application/msword";
+  if (extension === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (extension === "csv") return "text/csv;charset=utf-8";
+  if (extension === "html" || extension === "htm") return "text/html;charset=utf-8";
+  if (extension === "json") return "application/json;charset=utf-8";
+  if (["md", "markdown"].includes(extension ?? "")) return "text/markdown;charset=utf-8";
+  return "text/plain;charset=utf-8";
 }
 
 function splitFileNameExtension(fileName: string) {
@@ -524,11 +940,64 @@ function getMarkdownTitle(markdown: string) {
   return markdown.match(/^#\s+(.+)$/m)?.[1] ?? "Markdown 文档";
 }
 
+function getConclusionStreamAdvance(markdown: string, visibleLength: number) {
+  const remaining = markdown.length - visibleLength;
+  if (remaining <= 0) return { chunkSize: 0, delayMs: 0 };
+
+  const nextText = markdown.slice(visibleLength);
+  const nextBoundary = nextText.search(/[。！？；：，、,.!?;:\n|]/);
+  const chunkSize =
+    nextBoundary > 0 && nextBoundary <= CONCLUSION_STREAM_MAX_CHUNK_SIZE
+      ? nextBoundary + 1
+      : Math.min(remaining, CONCLUSION_STREAM_MIN_CHUNK_SIZE + Math.floor(Math.random() * 5));
+  const char = markdown[visibleLength + chunkSize - 1] ?? "";
+  const delayMs =
+    char === "\n"
+      ? 260
+      : /[。！？!?]/.test(char)
+        ? 240
+        : /[，、,；;：:|]/.test(char)
+          ? 150
+          : 72 + Math.floor(Math.random() * 55);
+
+  return { chunkSize, delayMs };
+}
+
+function buildFollowUpQuestions(agent: AgentKey, question: string) {
+  const normalizedQuestion = buildSessionTitle(question);
+
+  if (agent === "客户洞察" && /华润集团|华润/.test(normalizedQuestion)) {
+    return [
+      "深挖华润啤酒财务与人员结构，评估其BI采购预算潜力",
+      "对比金蝶/用友在华润体系的渗透情况，寻找差异化切入点",
+      "生成华润集团专项拓客报告，整合痛点分析与行动建议"
+    ];
+  }
+
+  if (agent === "风险管理") {
+    return [
+      "继续追踪该公司的政策合规风险与监管变化",
+      "整理该公司近半年负面舆情与风险事件",
+      "生成一份风险处置优先级与跟进清单"
+    ];
+  }
+
+  if (agent === "舆情监控") {
+    return [
+      "深挖目标客户近期采购与招投标线索",
+      "对比竞品切入路径，寻找差异化突破口",
+      "生成下一轮销售推进话术和拜访计划"
+    ];
+  }
+
+  return DEFAULT_FOLLOW_UP_QUESTIONS;
+}
+
 const INITIAL_AGENT_HISTORIES: AgentHistoryMap = {
   客户洞察: [
     createSession("insight-1", "帆软25年的销售额是多少", 0, 9, 12, true),
     createSession("insight-2", "公司同事的平均年齡大概在多大", 0, 11, 6, true),
-    createSession("insight-3", "帆软的客户主要集中在哪些行业…", 0, 14, 18, true),
+    createSession("insight-3", "帆软的客户主要集中在哪些行业？帆软未来五年的发展规划是什么？", 0, 14, 18, true),
     createSession("insight-4", "帆软的主要竞争对手有哪些?", 1, 16, 24),
     createSession("insight-5", "帆软在未来十年的发展战略是什么", 4, 10, 15),
     createSession("insight-6", "帆软在数据安全方面有哪些措施?", 7, 15, 42)
@@ -540,7 +1009,7 @@ const INITIAL_AGENT_HISTORIES: AgentHistoryMap = {
     createSession("risk-4", "帆软在组织扩张阶段的管理风险有哪些", 1, 17, 30),
     createSession("risk-5", "帆软未来三年的核心风险敞口与应对建议", 5, 19, 10)
   ],
-  商机挖掘: [
+  舆情监控: [
     createSession("oppty-1", "帆软最适合优先切入的行业客户有哪些", 0, 10, 5),
     createSession("oppty-2", "围绕帆软现有客户，找出可二次销售的机会点", 0, 15, 28),
     createSession("oppty-3", "判断帆软近期最可能推进的商业合作方向", 1, 11, 42),
@@ -559,6 +1028,70 @@ function Icon({ name }: { name: string }) {
   return <i className={`iconfont icon-${resolvedName}`} aria-hidden="true" />;
 }
 
+const RESOLUTION_SELECTED_ICONS: Record<"resolved" | "partial" | "unresolved", string> = {
+  resolved: resolutionResolvedSelectedIcon,
+  partial: resolutionPartialSelectedIcon,
+  unresolved: resolutionUnresolvedSelectedIcon
+};
+
+const RESOLUTION_DEFAULT_ICON_NAMES: Record<"resolved" | "partial" | "unresolved", string> = {
+  resolved: "yijiejue",
+  partial: "bufenjiejue",
+  unresolved: "weijiejue"
+};
+
+function ResolutionIcon({ type, selected = false }: { type: "resolved" | "partial" | "unresolved"; selected?: boolean }) {
+  if (selected) {
+    return <img className="chat-resolution-icon chat-resolution-icon-selected" src={RESOLUTION_SELECTED_ICONS[type]} alt="" />;
+  }
+
+  return (
+    <span className="chat-resolution-icon">
+      <Icon name={RESOLUTION_DEFAULT_ICON_NAMES[type]} />
+    </span>
+  );
+}
+
+function LoadingSpinnerIcon() {
+  return (
+    <span className="chat-loading-spinner">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="chat-loading-spinner-gradient-1" x1="50%" x2="50%" y1="5.271%" y2="91.793%">
+            <stop offset="0%" stopColor="currentColor" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0.55" />
+          </linearGradient>
+          <linearGradient id="chat-loading-spinner-gradient-2" x1="50%" x2="50%" y1="15.24%" y2="87.15%">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0.55" />
+          </linearGradient>
+        </defs>
+        <g fill="none">
+          <path
+            d="M8.749.021a1.5 1.5 0 0 1 .497 2.958A7.5 7.5 0 0 0 3 10.375a7.5 7.5 0 0 0 7.5 7.5v3c-5.799 0-10.5-4.7-10.5-10.5C0 5.23 3.726.865 8.749.021"
+            fill="url(#chat-loading-spinner-gradient-1)"
+            transform="translate(1.5 1.625)"
+          />
+          <path
+            d="M15.392 2.673a1.5 1.5 0 0 1 2.119-.115A10.48 10.48 0 0 1 21 10.375c0 5.8-4.701 10.5-10.5 10.5v-3a7.5 7.5 0 0 0 5.007-13.084a1.5 1.5 0 0 1-.115-2.118"
+            fill="url(#chat-loading-spinner-gradient-2)"
+            transform="translate(1.5 1.625)"
+          />
+        </g>
+      </svg>
+    </span>
+  );
+}
+
+function getThinkingStepIcon(step: string) {
+  if (step.includes("阅读")) return "yuedu";
+  if (step.includes("搜索网络") || step.includes("AI搜索")) return "sousuowaibu";
+  if (step.includes("加载设计规范")) return "jiazaishejiguifan";
+  if (step.includes("分支机构")) return "sousuoneibu";
+  if (step.includes("绘制")) return "huizhi";
+  return "gongju";
+}
+
 function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [isAutoCollapsed, setIsAutoCollapsed] = useState(() =>
@@ -570,6 +1103,15 @@ function App() {
   const [activeAgentIndex, setActiveAgentIndex] = useState(0);
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
   const [isNewChatActive, setIsNewChatActive] = useState(true);
+  const [conversationRuns, setConversationRuns] = useState<ConversationRun[]>([]);
+  const [answerFeedback, setAnswerFeedback] = useState<AnswerFeedback>(null);
+  const [answerResolutionFeedback, setAnswerResolutionFeedback] = useState<AnswerResolutionFeedback>(null);
+  const [pendingResolutionFeedback, setPendingResolutionFeedback] = useState<ResolutionPopconfirmValue | null>(null);
+  const [resolutionPopconfirmPlacement, setResolutionPopconfirmPlacement] =
+    useState<ResolutionPopconfirmPlacement>("bottom");
+  const [selectedResolutionReasons, setSelectedResolutionReasons] = useState<string[]>([]);
+  const [resolutionFeedbackText, setResolutionFeedbackText] = useState("");
+  const [isResolutionThanksVisible, setIsResolutionThanksVisible] = useState(false);
   const [agentHistories, setAgentHistories] = useState<AgentHistoryMap>(INITIAL_AGENT_HISTORIES);
   const [files, setFiles] = useState<FileItem[]>(INITIAL_FILES);
   const [fileMarkdownByName, setFileMarkdownByName] = useState<Record<string, string>>(INITIAL_FILE_MARKDOWN);
@@ -580,6 +1122,7 @@ function App() {
     earlier: true
   });
   const [openHistoryMenu, setOpenHistoryMenu] = useState<HistoryMenuState>(null);
+  const [renamingHistory, setRenamingHistory] = useState<HistoryRenameState>(null);
   const [collapsedTooltip, setCollapsedTooltip] = useState<CollapsedTooltipState>(null);
   const [openCollapsedPopover, setOpenCollapsedPopover] = useState<CollapsedPopoverState>(null);
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<UtilityPanel>(null);
@@ -596,6 +1139,13 @@ function App() {
   const [activeFileMentionIndex, setActiveFileMentionIndex] = useState(0);
   const [composerFiles, setComposerFiles] = useState<ComposerFileAttachment[]>([]);
   const [showTabsMore, setShowTabsMore] = useState(false);
+  const [isChatAtBottom, setIsChatAtBottom] = useState(true);
+  const [conversationComposerHeight, setConversationComposerHeight] = useState(126);
+  const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
+  const [isSourceDrawerOpen, setIsSourceDrawerOpen] = useState(false);
+  const [isExternalSourcesExpanded, setIsExternalSourcesExpanded] = useState(true);
+  const [selectedFeedbackReasons, setSelectedFeedbackReasons] = useState<string[]>([]);
+  const [feedbackText, setFeedbackText] = useState("");
   const [openUploadMenu, setOpenUploadMenu] = useState<FloatingPointState>(null);
   const [openFileMenu, setOpenFileMenu] = useState<FileMenuState>(null);
   const [openFileRenamePopover, setOpenFileRenamePopover] = useState<FileRenamePopoverState>(null);
@@ -605,6 +1155,8 @@ function App() {
   const spotlightCurrentRef = useRef({ x: 0, y: 0, opacity: 0 });
   const spotlightTargetRef = useRef({ x: 0, y: 0, opacity: 0 });
   const historyMenuRef = useRef<HTMLDivElement | null>(null);
+  const historyRenameInputRef = useRef<HTMLInputElement | null>(null);
+  const shouldSkipHistoryRenameBlurRef = useRef(false);
   const uploadMenuRef = useRef<HTMLDivElement | null>(null);
   const fileMenuRef = useRef<HTMLDivElement | null>(null);
   const fileRenamePopoverRef = useRef<HTMLFormElement | null>(null);
@@ -613,6 +1165,10 @@ function App() {
   const uploadProgressTimersRef = useRef<Record<string, number>>({});
   const collapsedPopoverRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLElement | null>(null);
+  const chatStageBodyRef = useRef<HTMLDivElement | null>(null);
+  const shouldFollowChatRef = useRef(true);
+  const isAutoScrollingChatRef = useRef(false);
+  const hasUserInterruptedChatScrollRef = useRef(false);
   const fileMentionPanelRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -622,9 +1178,38 @@ function App() {
   const tabsRef = useRef<HTMLDivElement | null>(null);
   const tabsTrackRef = useRef<HTMLDivElement | null>(null);
 
-  const prompts = useMemo(() => PROMPTS[activeTab], [activeTab]);
   const activeAgent = AGENTS[activeAgentIndex];
+  const visibleTabs = useMemo(() => {
+    if (activeAgent === "客户洞察") return CUSTOMER_INSIGHT_TABS;
+    if (activeAgent === "风险管理") return RISK_MANAGEMENT_TABS;
+    if (activeAgent === "舆情监控") return PUBLIC_OPINION_TABS;
+    return TABS;
+  }, [activeAgent]);
+  const prompts = useMemo(() => {
+    if (activeAgent === "风险管理") {
+      return RISK_MANAGEMENT_PROMPTS[activeTab] ?? PROMPTS[activeTab];
+    }
+    if (activeAgent === "舆情监控") {
+      return OPPORTUNITY_MINING_PROMPTS[activeTab] ?? PROMPTS[activeTab];
+    }
+    return PROMPTS[activeTab];
+  }, [activeAgent, activeTab]);
   const activeAgentHistories = useMemo(() => agentHistories[activeAgent], [activeAgent, agentHistories]);
+  const activeRun = conversationRuns[conversationRuns.length - 1] ?? null;
+  const hasConversation = conversationRuns.length > 0;
+  const setActiveRun = (
+    nextRun: ConversationRun | null | ((current: ConversationRun | null) => ConversationRun | null)
+  ) => {
+    setConversationRuns((currentRuns) => {
+      const currentRun = currentRuns[currentRuns.length - 1] ?? null;
+      const resolvedRun = typeof nextRun === "function" ? nextRun(currentRun) : nextRun;
+
+      if (!resolvedRun) return [];
+      if (currentRuns.length === 0) return [resolvedRun];
+
+      return currentRuns.map((run, index) => (index === currentRuns.length - 1 ? resolvedRun : run));
+    });
+  };
   const isSidebarCollapsed = collapsed || isAutoCollapsed;
   const visibleFiles = useMemo(() => {
     const query = filesSearchQuery.trim().toLowerCase();
@@ -664,6 +1249,19 @@ function App() {
     () => (activeHistoryId ? activeAgentHistories.find((session) => session.id === activeHistoryId) ?? null : null),
     [activeAgentHistories, activeHistoryId]
   );
+  const isCurrentSessionFavorite = Boolean(activeHistorySession?.isFavorite);
+  const isGeneratingResponse = Boolean(
+    activeRun &&
+      !activeRun.isStopped &&
+      (activeRun.stage !== "done" || activeRun.conclusionVisibleLength < activeRun.conclusionMarkdown.length)
+  );
+  const shouldShowScrollToBottom = Boolean(hasConversation && !isChatAtBottom);
+  const conversationContentStyle = hasConversation
+    ? ({
+        "--moss-conversation-composer-height": `${conversationComposerHeight}px`
+      } as CSSProperties)
+    : undefined;
+  const canSubmitDislikeFeedback = selectedFeedbackReasons.length > 0 || feedbackText.trim().length > 0;
   const isCollapsedFavoritesSelected = Boolean(activeHistorySession?.isFavorite);
   const isCollapsedHistorySelected = Boolean(activeHistorySession && !activeHistorySession.isFavorite);
   const collapsedNavItems = useMemo(
@@ -739,6 +1337,22 @@ function App() {
     setActivePrompt(1);
   }, [activeTab]);
 
+  useEffect(() => {
+    if (visibleTabs.some((tab) => tab.key === activeTab)) return;
+    setActiveTab(visibleTabs[0]?.key ?? "portrait");
+  }, [activeTab, visibleTabs]);
+
+  useEffect(() => {
+    setIsResolutionThanksVisible(false);
+    if (!answerResolutionFeedback) return;
+
+    const timerId = window.setTimeout(() => {
+      setIsResolutionThanksVisible(true);
+    }, 1600);
+
+    return () => window.clearTimeout(timerId);
+  }, [answerResolutionFeedback]);
+
 
   useEffect(() => {
     if (activeUtilityPanel !== "files") {
@@ -752,7 +1366,7 @@ function App() {
       setEditingFileName(null);
       setEditingFileDraft("");
     }
-  }, [activeUtilityPanel]);
+  }, [activeUtilityPanel, visibleTabs]);
 
   useEffect(() => {
     if (!activeFileDetailName) return;
@@ -820,6 +1434,27 @@ function App() {
     textareaRef.current.style.height = `${Math.max(nextHeight, 60)}px`;
     textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 200 ? "auto" : "hidden";
   }, [draft]);
+
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) return;
+
+    const updateComposerHeight = () => {
+      const nextHeight = Number(composer.getBoundingClientRect().height.toFixed(2));
+      setConversationComposerHeight((currentHeight) => (currentHeight === nextHeight ? currentHeight : nextHeight));
+    };
+
+    updateComposerHeight();
+
+    const resizeObserver = new ResizeObserver(updateComposerHeight);
+    resizeObserver.observe(composer);
+    window.addEventListener("resize", updateComposerHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateComposerHeight);
+    };
+  }, [activeAgent]);
 
   useEffect(() => {
     if (!fileMentionRange) return;
@@ -925,6 +1560,17 @@ function App() {
       window.removeEventListener("scroll", closeMenu, true);
     };
   }, [openHistoryMenu]);
+
+  useEffect(() => {
+    if (!renamingHistory) return;
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      historyRenameInputRef.current?.focus();
+      historyRenameInputRef.current?.select();
+    });
+
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [renamingHistory?.sessionId]);
 
   useEffect(() => {
     if (!openCollapsedPopover) return;
@@ -1052,11 +1698,29 @@ function App() {
       setActiveHistoryId(null);
       setIsNewChatActive(true);
       setOpenHistoryMenu(null);
+      setRenamingHistory(null);
+      setIsSourceDrawerOpen(false);
     }
   }, [activeAgentHistories, activeHistoryId]);
 
   useEffect(() => {
+    setIsNewChatActive(true);
+    setActiveHistoryId(null);
+    setActiveRun(null);
+    shouldFollowChatRef.current = true;
+    hasUserInterruptedChatScrollRef.current = false;
+    setIsChatAtBottom(true);
+    setAnswerFeedback(null);
+    setAnswerResolutionFeedback(null);
+    setIsFeedbackDialogOpen(false);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
+    setDraft("");
+    setComposerFiles([]);
+    setFileMentionRange(null);
     setOpenHistoryMenu(null);
+    setRenamingHistory(null);
+    setIsSourceDrawerOpen(false);
     setOpenCollapsedPopover(null);
     setCollapsedTooltip(null);
   }, [activeAgent]);
@@ -1077,6 +1741,125 @@ function App() {
       setCollapsedTooltip(null);
     }
   }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    if (!activeRun) return;
+    if (!activeRun.responseStarted) {
+      const startTimerId = window.setTimeout(() => {
+        setActiveRun((current) => {
+          if (!current || current.id !== activeRun.id || current.responseStarted || current.isStopped) return current;
+          return {
+            ...current,
+            responseStarted: true
+          };
+        });
+      }, 520);
+
+      return () => window.clearTimeout(startTimerId);
+    }
+
+    const totalSteps = THINKING_CHAIN_STEPS.length;
+
+    if (activeRun.stage === "thinking") {
+      const thinkingTimerId = window.setTimeout(() => {
+        setActiveRun((current) => {
+          if (!current || current.id !== activeRun.id || current.stage !== "thinking" || current.isStopped) return current;
+          return {
+            ...current,
+            stage: "processing"
+          };
+        });
+      }, 1400);
+
+      return () => window.clearTimeout(thinkingTimerId);
+    }
+
+    if (activeRun.stage === "done") return;
+
+    const timerId = window.setTimeout(() => {
+      setActiveRun((current) => {
+        if (!current || current.id !== activeRun.id || current.isStopped) return current;
+
+        if (current.stage === "processing" && current.visibleSteps < totalSteps) {
+          return { ...current, visibleSteps: current.visibleSteps + 1 };
+        }
+        if (current.stage === "processing") {
+          return {
+            ...current,
+            stage: "done",
+            completedAt: new Date().toISOString(),
+            isThinkingExpanded: false
+          };
+        }
+        return current;
+      });
+    }, activeRun.visibleSteps < totalSteps ? 620 : 900);
+
+    return () => window.clearTimeout(timerId);
+  }, [activeRun]);
+
+  useEffect(() => {
+    if (!activeRun || activeRun.stage !== "done") return;
+    if (activeRun.isStopped) return;
+    if (activeRun.conclusionVisibleLength >= activeRun.conclusionMarkdown.length) return;
+
+    const { chunkSize, delayMs } = getConclusionStreamAdvance(
+      activeRun.conclusionMarkdown,
+      activeRun.conclusionVisibleLength
+    );
+
+    const streamTimerId = window.setTimeout(() => {
+      setActiveRun((current) => {
+        if (!current || current.id !== activeRun.id || current.stage !== "done" || current.isStopped) return current;
+
+        return {
+          ...current,
+          conclusionVisibleLength: Math.min(
+            current.conclusionMarkdown.length,
+            current.conclusionVisibleLength + chunkSize
+          )
+        };
+      });
+    }, delayMs);
+
+    return () => window.clearTimeout(streamTimerId);
+  }, [activeRun]);
+
+  useEffect(() => {
+    if (!activeRun) return;
+    if (activeRun.isStopped) return;
+    const isOutputting =
+      activeRun.stage !== "done" || activeRun.conclusionVisibleLength < activeRun.conclusionMarkdown.length;
+    if (!isOutputting) return;
+
+    const scrollFrameId = window.requestAnimationFrame(() => {
+      if (!shouldFollowChatRef.current) return;
+
+      const stageBody = chatStageBodyRef.current;
+      if (!stageBody) return;
+
+      isAutoScrollingChatRef.current = true;
+      stageBody.scrollTo({
+        top: stageBody.scrollHeight,
+        behavior: "auto"
+      });
+      setIsChatAtBottom(true);
+
+      window.requestAnimationFrame(() => {
+        isAutoScrollingChatRef.current = false;
+      });
+    });
+
+    return () => window.cancelAnimationFrame(scrollFrameId);
+  }, [
+    activeRun?.id,
+    activeRun?.stage,
+    activeRun?.isStopped,
+    activeRun?.visibleSteps,
+    activeRun?.responseStarted,
+    activeRun?.conclusionVisibleLength,
+    activeRun?.conclusionMarkdown.length
+  ]);
 
   useEffect(() => {
     if (!isFilesPanelResizing) return;
@@ -1110,22 +1893,48 @@ function App() {
   const activateNewChat = () => {
     setIsNewChatActive(true);
     setActiveHistoryId(null);
+    setActiveRun(null);
+    shouldFollowChatRef.current = true;
+    hasUserInterruptedChatScrollRef.current = false;
+    setIsChatAtBottom(true);
+    setAnswerFeedback(null);
+    setAnswerResolutionFeedback(null);
+    setIsFeedbackDialogOpen(false);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
     setOpenHistoryMenu(null);
+    setRenamingHistory(null);
+    setIsSourceDrawerOpen(false);
     setOpenCollapsedPopover(null);
   };
 
-  const onSend = () => {
-    const text = getComposerPlainText(draft, composerFiles).trim();
-    if (!text && uploadComposerFiles.length === 0) return;
-    setOpenHistoryMenu(null);
-    const now = new Date().toISOString();
-    const titleText = text || uploadComposerFiles.map((file) => file.name).join("、");
+  const submitQuestion = (questionText: string) => {
+    const normalizedText = buildSessionTitle(questionText);
+    if (!normalizedText) return;
 
-    if (isNewChatActive || !activeHistoryId) {
+    const shouldCreateSession = isNewChatActive || !activeHistoryId;
+    shouldFollowChatRef.current = true;
+    hasUserInterruptedChatScrollRef.current = false;
+    setIsChatAtBottom(true);
+    setAnswerFeedback(null);
+    setAnswerResolutionFeedback(null);
+    setIsFeedbackDialogOpen(false);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
+    setOpenHistoryMenu(null);
+    setRenamingHistory(null);
+    setIsSourceDrawerOpen(false);
+    if (activeUtilityPanel === "files") {
+      setFilesPanelWidth((currentWidth) => Math.max(currentWidth, FILES_PANEL_CONVERSATION_WIDTH));
+    }
+    const now = new Date().toISOString();
+
+    if (shouldCreateSession) {
       const sessionId = `session-${Date.now()}`;
       const nextSession: HistorySession = {
         id: sessionId,
-        title: buildSessionTitle(titleText),
+        title: normalizedText,
+        question: normalizedText,
         createdAt: now,
         updatedAt: now,
         isFavorite: false
@@ -1146,9 +1955,203 @@ function App() {
       }));
     }
 
+    const nextRun: ConversationRun = {
+      id: `run-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      question: normalizedText,
+      createdAt: now,
+      conclusionMarkdown: buildConversationConclusionMarkdown(activeAgent, normalizedText),
+      conclusionVisibleLength: 0,
+      stage: "thinking",
+      visibleSteps: 0,
+      responseStarted: false,
+      isThinkingExpanded: true,
+      isStopped: false,
+      actionVariant: createActionVariant()
+    };
+
+    setConversationRuns((currentRuns) => (shouldCreateSession ? [nextRun] : [...currentRuns, nextRun]));
+  };
+
+  const onSend = () => {
+    const text = getComposerPlainText(draft, composerFiles).trim();
+    if (!text && uploadComposerFiles.length === 0) return;
+    const titleText = text || uploadComposerFiles.map((file) => file.name).join("、");
+    submitQuestion(titleText);
+
     setDraft("");
     setFileMentionRange(null);
     setComposerFiles([]);
+  };
+
+  const stopGeneratingResponse = () => {
+    setActiveRun((current) => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        stage: "done",
+        completedAt: current.completedAt ?? new Date().toISOString(),
+        visibleSteps: current.visibleSteps,
+        responseStarted: true,
+        isThinkingExpanded: current.visibleSteps > 0,
+        conclusionVisibleLength: current.conclusionVisibleLength,
+        isStopped: true
+      };
+    });
+  };
+
+  const syncChatBottomState = (target: HTMLDivElement) => {
+    const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    const isAtBottom = distanceToBottom <= CHAT_BOTTOM_THRESHOLD;
+
+    if (isAutoScrollingChatRef.current) {
+      if (isAtBottom) shouldFollowChatRef.current = true;
+      setIsChatAtBottom(isAtBottom);
+      return;
+    }
+
+    if (isAtBottom) {
+      shouldFollowChatRef.current = true;
+      hasUserInterruptedChatScrollRef.current = false;
+    } else if (hasUserInterruptedChatScrollRef.current) {
+      shouldFollowChatRef.current = false;
+    }
+
+    setIsChatAtBottom(isAtBottom);
+  };
+
+  const handleChatStageScroll = (event: ReactUIEvent<HTMLDivElement>) => {
+    syncChatBottomState(event.currentTarget);
+  };
+
+  const markChatScrollInterrupted = () => {
+    hasUserInterruptedChatScrollRef.current = true;
+  };
+
+  const scrollChatToBottom = () => {
+    shouldFollowChatRef.current = true;
+    hasUserInterruptedChatScrollRef.current = false;
+    const stageBody = chatStageBodyRef.current;
+    if (!stageBody) return;
+
+    isAutoScrollingChatRef.current = true;
+    stageBody.scrollTo({
+      top: stageBody.scrollHeight,
+      behavior: "auto"
+    });
+    setIsChatAtBottom(true);
+    window.requestAnimationFrame(() => {
+      isAutoScrollingChatRef.current = false;
+    });
+  };
+
+  const toggleLikeFeedback = () => {
+    setAnswerResolutionFeedback(null);
+    setAnswerFeedback((current) => (current === "liked" ? null : "liked"));
+    setIsFeedbackDialogOpen(false);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
+  };
+
+  const toggleDislikeFeedback = () => {
+    setAnswerResolutionFeedback(null);
+    if (answerFeedback === "disliked") {
+      setAnswerFeedback(null);
+      return;
+    }
+
+    setIsFeedbackDialogOpen(true);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
+  };
+
+  const closeFeedbackDialog = () => {
+    setIsFeedbackDialogOpen(false);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
+  };
+
+  const closeResolutionPopconfirm = () => {
+    setPendingResolutionFeedback(null);
+    setSelectedResolutionReasons([]);
+    setResolutionFeedbackText("");
+  };
+
+  const selectResolutionFeedback = (
+    value: Exclude<AnswerResolutionFeedback, null>,
+    triggerElement?: HTMLButtonElement
+  ) => {
+    setAnswerFeedback(null);
+    setIsFeedbackDialogOpen(false);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
+    if (value === "resolved") {
+      closeResolutionPopconfirm();
+      setAnswerResolutionFeedback((current) => (current === value ? null : value));
+      return;
+    }
+
+    if (triggerElement && typeof window !== "undefined") {
+      const triggerRect = triggerElement.getBoundingClientRect();
+      const estimatedPopconfirmHeight = 214;
+      const safeGap = 24;
+      const spaceBelow = window.innerHeight - triggerRect.bottom;
+      const spaceAbove = triggerRect.top;
+      setResolutionPopconfirmPlacement(
+        spaceBelow < estimatedPopconfirmHeight + safeGap && spaceAbove > spaceBelow ? "top" : "bottom"
+      );
+    }
+
+    setPendingResolutionFeedback(value);
+    setSelectedResolutionReasons([]);
+    setResolutionFeedbackText("");
+  };
+
+  const confirmResolutionFeedback = () => {
+    if (!pendingResolutionFeedback) return;
+    setAnswerResolutionFeedback(pendingResolutionFeedback);
+    closeResolutionPopconfirm();
+  };
+
+  const toggleResolutionReason = (reason: string) => {
+    setSelectedResolutionReasons((current) =>
+      current.includes(reason) ? current.filter((item) => item !== reason) : [...current, reason]
+    );
+  };
+
+  const toggleFeedbackReason = (reason: string) => {
+    setSelectedFeedbackReasons((current) =>
+      current.includes(reason) ? current.filter((item) => item !== reason) : [...current, reason]
+    );
+  };
+
+  const submitDislikeFeedback = (event: ReactFormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSubmitDislikeFeedback) return;
+
+    setAnswerFeedback("disliked");
+    setIsFeedbackDialogOpen(false);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
+  };
+
+  const copyActiveAnswer = async (run = activeRun) => {
+    if (!run) return;
+
+    await navigator.clipboard?.writeText(run.conclusionMarkdown);
+  };
+
+  const regenerateActiveAnswer = (run = activeRun) => {
+    if (!run) return;
+
+    submitQuestion(run.question);
+  };
+
+  const fillFollowUpQuestion = (question: string) => {
+    setDraft(question);
+    setFileMentionRange(null);
+    setComposerFiles([]);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
   const getFilesPanelMaxWidth = () => {
@@ -1187,23 +2190,84 @@ function App() {
     setOpenHistoryMenu(null);
   };
 
-  const renameHistoryItem = (sessionId: string, currentTitle: string) => {
-    const nextName = window.prompt("重命名", currentTitle)?.trim();
-    if (!nextName || nextName === currentTitle) {
-      setOpenHistoryMenu(null);
-      return;
+  const openHistorySession = (session: HistorySession) => {
+    if (renamingHistory) return;
+
+    const doneAt = session.updatedAt;
+    const question = getHistorySessionQuestion(session);
+    const conclusionMarkdown = buildConversationConclusionMarkdown(activeAgent, question);
+    shouldFollowChatRef.current = true;
+    hasUserInterruptedChatScrollRef.current = false;
+    setIsChatAtBottom(true);
+    setAnswerFeedback(null);
+    setAnswerResolutionFeedback(null);
+    setIsFeedbackDialogOpen(false);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
+    if (activeUtilityPanel === "files") {
+      setFilesPanelWidth((currentWidth) => Math.max(currentWidth, FILES_PANEL_CONVERSATION_WIDTH));
     }
+    setActiveHistoryId(session.id);
+    setIsNewChatActive(false);
+    setConversationRuns([{
+      id: `history-run-${session.id}`,
+      question,
+      createdAt: doneAt,
+      completedAt: doneAt,
+      conclusionMarkdown,
+      conclusionVisibleLength: conclusionMarkdown.length,
+      stage: "done",
+      visibleSteps: THINKING_CHAIN_STEPS.length,
+      responseStarted: true,
+      isThinkingExpanded: false,
+      isStopped: false,
+      actionVariant: getStableActionVariant(session.id)
+    }]);
+  };
+
+  const startHistoryRename = (session: HistorySession) => {
+    shouldSkipHistoryRenameBlurRef.current = false;
+    setOpenHistoryMenu(null);
+    setRenamingHistory({
+      sessionId: session.id,
+      value: session.title
+    });
+  };
+
+  const cancelHistoryRename = () => {
+    shouldSkipHistoryRenameBlurRef.current = true;
+    setRenamingHistory(null);
+  };
+
+  const confirmHistoryRename = (sessionId: string) => {
+    const renameState = renamingHistory;
+    if (!renameState || renameState.sessionId !== sessionId) return;
+
+    shouldSkipHistoryRenameBlurRef.current = false;
+    const nextName = buildSessionTitle(renameState.value);
+    const currentTitle = activeAgentHistories.find((session) => session.id === sessionId)?.title;
+    setRenamingHistory(null);
+
+    if (!nextName || !currentTitle || nextName === currentTitle) return;
 
     setAgentHistories((prev) => ({
       ...prev,
       [activeAgent]: prev[activeAgent].map((session) =>
-        session.id === sessionId ? { ...session, title: nextName } : session
+        session.id === sessionId
+          ? {
+              ...session,
+              title: nextName,
+              question: session.question ?? (activeHistoryId === sessionId ? activeRun?.question ?? session.title : session.title)
+            }
+          : session
       )
     }));
-    setOpenHistoryMenu(null);
   };
 
   const deleteHistoryItem = (sessionId: string) => {
+    if (renamingHistory?.sessionId === sessionId) {
+      setRenamingHistory(null);
+    }
     setAgentHistories((prev) => ({
       ...prev,
       [activeAgent]: prev[activeAgent].filter((session) => session.id !== sessionId)
@@ -1227,7 +2291,7 @@ function App() {
         <button
           type="button"
           className="history-item-menu-option"
-          onClick={() => renameHistoryItem(session.id, session.title)}
+          onClick={() => startHistoryRename(session)}
         >
           <span className="history-item-menu-icon" aria-hidden="true">
             <Icon name="bianji" />
@@ -1288,8 +2352,12 @@ function App() {
   };
 
   const toggleUtilityPanel = (panel: Exclude<UtilityPanel, null>) => {
+    if (panel === "files" && activeUtilityPanel !== "files" && hasConversation) {
+      setFilesPanelWidth((currentWidth) => Math.max(currentWidth, FILES_PANEL_CONVERSATION_WIDTH));
+    }
     setActiveUtilityPanel((current) => (current === panel ? null : panel));
     setOpenHistoryMenu(null);
+    setRenamingHistory(null);
     setOpenCollapsedPopover(null);
     setCollapsedTooltip(null);
   };
@@ -1351,7 +2419,7 @@ function App() {
 
   const addComposerFile = (file: Omit<ComposerFileAttachment, "id"> & { id?: string }) => {
     setComposerFiles((current) => {
-      if (file.source === "upload" && current.some((item) => item.name === file.name && item.source === file.source)) {
+      if (current.some((item) => item.name === file.name && item.source === file.source)) {
         return current;
       }
 
@@ -1379,6 +2447,13 @@ function App() {
     setComposerFiles((current) => current.filter((file) => file.id !== fileId));
   };
 
+  const removeComposerReferenceByName = (fileName: string) => {
+    setDraft((current) => removeComposerReferenceFromText(current, fileName).trimStart());
+    setComposerFiles((current) => current.filter((file) => file.source !== "reference" || file.name !== fileName));
+    setFileMentionRange(null);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
   const onUploadFiles = (event: ReactChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(event.target.files ?? []);
     const existingUploadNames = new Set(uploadComposerFiles.map((file) => file.name));
@@ -1391,7 +2466,7 @@ function App() {
       addComposerFile({
         id,
         name: file.name,
-        icon: getFileIcon(file.name),
+        icon: getUploadFileIcon(file.name),
         size: formatFileSize(file.size),
         uploadProgress: 0,
         isUploading: true,
@@ -1418,7 +2493,7 @@ function App() {
         return {
           name: uniqueName,
           size: formatFileSize(file.size),
-          icon: getFileIcon(uniqueName)
+          icon: getFileCoverIcon(uniqueName)
         };
       });
 
@@ -1489,14 +2564,140 @@ function App() {
     );
   };
 
+  const renderSourceDrawer = () => {
+    if (!isSourceDrawerOpen) return null;
+
+    return (
+      <div className="source-drawer-layer" role="presentation">
+        <div className="source-drawer-mask" aria-hidden="true" />
+        <aside className="source-drawer" role="dialog" aria-modal="true" aria-labelledby="source-drawer-title">
+          <header className="source-drawer-header">
+            <h3 id="source-drawer-title">信息来源</h3>
+            <button
+              type="button"
+              className="source-drawer-close"
+              aria-label="关闭"
+              onClick={() => setIsSourceDrawerOpen(false)}
+            >
+              <i className="iconfont icon-guanbi" aria-hidden="true" />
+            </button>
+          </header>
+          <div className="source-drawer-body">
+            {INTERNAL_SOURCE_GROUPS.map((group) => (
+              <section className="source-section source-section-internal" key={group.title}>
+                <div className="source-section-title">
+                  <span className="source-section-accent" aria-hidden="true" />
+                  <span>{group.title}</span>
+                </div>
+                <div className="source-internal-list">
+                  {group.items.map((item) => (
+                    <div className="source-internal-item" key={item}>
+                      <span className="source-check-icon" aria-hidden="true" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+            <section className="source-section source-section-external">
+              <button
+                type="button"
+                className="source-section-title source-section-toggle"
+                aria-expanded={isExternalSourcesExpanded}
+                onClick={() => setIsExternalSourcesExpanded((isExpanded) => !isExpanded)}
+              >
+                <span className="source-section-accent" aria-hidden="true" />
+                <span>外部来源</span>
+                <span className="source-section-caret" aria-hidden="true">
+                  <Icon name="jiantou_xiangxia" />
+                </span>
+              </button>
+              {isExternalSourcesExpanded ? (
+                <div className="source-external-list">
+                  {EXTERNAL_SOURCES.map((source, index) => (
+                    <article className="source-external-card" key={`${source.domain}-${index}`}>
+                      <div className="source-external-meta">
+                        <span className="source-index">{index + 1}</span>
+                        <img className="source-favicon" src={source.icon} alt="" aria-hidden="true" />
+                        <span className="source-domain">{source.domain}</span>
+                      </div>
+                      <h4>{source.title}</h4>
+                      <p>{source.summary}</p>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          </div>
+        </aside>
+      </div>
+    );
+  };
+
+  const renderFeedbackDialog = () => {
+    if (!isFeedbackDialogOpen) return null;
+
+    return createPortal(
+      <div className="feedback-dialog-backdrop" role="presentation">
+        <form
+          className="feedback-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="feedback-dialog-title"
+          onSubmit={submitDislikeFeedback}
+        >
+          <div className="feedback-dialog-header">
+            <h3 id="feedback-dialog-title">谢谢你的反馈，我们会继续优化进步</h3>
+            <button type="button" className="feedback-dialog-close" aria-label="关闭" onClick={closeFeedbackDialog}>
+              <i className="iconfont icon-guanbi" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="feedback-dialog-body">
+            <div className="feedback-reason-grid">
+              {DISLIKE_FEEDBACK_OPTIONS.map((reason) => (
+                <label key={reason} className="feedback-reason-option">
+                  <input
+                    type="checkbox"
+                    checked={selectedFeedbackReasons.includes(reason)}
+                    onChange={() => toggleFeedbackReason(reason)}
+                  />
+                  <span>{reason}</span>
+                </label>
+              ))}
+            </div>
+            <textarea
+              className="feedback-dialog-textarea"
+              placeholder="其他我想吐槽的"
+              value={feedbackText}
+              onChange={(event) => setFeedbackText(event.target.value)}
+            />
+          </div>
+          <div className="feedback-dialog-footer">
+            <button type="button" className="feedback-dialog-button secondary" onClick={closeFeedbackDialog}>
+              取消
+            </button>
+            <button type="submit" className="feedback-dialog-button primary" disabled={!canSubmitDislikeFeedback}>
+              确定
+            </button>
+          </div>
+        </form>
+      </div>,
+      document.body
+    );
+  };
+
   const quoteFileToComposer = (fileName: string) => {
-    const file = files.find((item) => item.name === fileName);
+    if (referenceComposerFiles.some((item) => item.name === fileName)) {
+      window.requestAnimationFrame(() => textareaRef.current?.focus());
+      return;
+    }
+
     const referenceId = `reference-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     let nextCursor = 0;
     addComposerFile({
       id: referenceId,
       name: fileName,
-      icon: file?.icon ?? getFileIcon(fileName),
+      icon: getUploadFileIcon(fileName),
       source: "reference"
     });
     setDraft((current) => {
@@ -1517,8 +2718,12 @@ function App() {
     const nextDraft = event.target.value;
     const cursor = event.target.selectionStart ?? nextDraft.length;
     const mentionRange = getFileMentionRange(nextDraft, cursor) ?? getFileMentionRange(nextDraft, nextDraft.length);
+    const nextReferenceNames = getComposerReferenceNames(nextDraft);
 
     setDraft(nextDraft);
+    setComposerFiles((current) =>
+      current.filter((file) => file.source !== "reference" || nextReferenceNames.has(file.name))
+    );
     setFileMentionRange(mentionRange);
   };
 
@@ -1563,12 +2768,11 @@ function App() {
   const selectMentionFile = (fileName: string) => {
     if (!fileMentionRange) return;
 
-    const file = files.find((item) => item.name === fileName);
     const referenceId = `reference-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     addComposerFile({
       id: referenceId,
       name: fileName,
-      icon: file?.icon ?? getFileIcon(fileName),
+      icon: getUploadFileIcon(fileName),
       source: "reference"
     });
     const marker = `${COMPOSER_REFERENCE_START}${fileName}${COMPOSER_REFERENCE_END}`;
@@ -1583,6 +2787,9 @@ function App() {
   };
 
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    const nativeEvent = event.nativeEvent as KeyboardEvent;
+    const isComposing = nativeEvent.isComposing || nativeEvent.keyCode === 229;
+
     if (event.key === "@") {
       event.preventDefault();
       insertComposerText("@");
@@ -1608,6 +2815,12 @@ function App() {
         });
         return;
       }
+    }
+
+    if (!fileMentionRange && event.key === "Enter" && !event.shiftKey && !isComposing) {
+      event.preventDefault();
+      onSend();
+      return;
     }
 
     if (!fileMentionRange) return;
@@ -1649,7 +2862,7 @@ function App() {
             className={file.isUploading ? "composer-file-tag uploading" : "composer-file-tag"}
             style={{ "--upload-progress": `${file.uploadProgress ?? 100}%` } as CSSProperties}
           >
-            <img className="composer-file-tag-icon" src={getFileIcon(file.name)} alt="" />
+            <img className="composer-file-tag-icon" src={file.icon} alt="" />
             <span className="composer-file-tag-content">
               <span className="composer-file-tag-name">{file.name}</span>
               {file.size ? <span className="composer-file-tag-size">{file.size}</span> : null}
@@ -1702,7 +2915,8 @@ function App() {
             return node.value ? <span key={`text-${index}`}>{node.value}</span> : null;
           }
 
-          const fileName = composerFiles.find((item) => item.source === "reference" && item.name === node.name)?.name ?? node.name;
+          const referenceFile = composerFiles.find((item) => item.source === "reference" && item.name === node.name);
+          const fileName = referenceFile?.name ?? node.name;
           const removeReferenceFromComposer = () => {
             setDraft((current) => `${current.slice(0, node.start)}${current.slice(node.end)}`);
             setComposerFiles((current) => {
@@ -1732,7 +2946,7 @@ function App() {
               onClick={removeReferenceFromComposer}
             >
               <span className="composer-reference-chip-icon-wrap" aria-hidden="true">
-                <img className="composer-reference-chip-icon" src={getFileIcon(fileName)} alt="" />
+                <img className="composer-reference-chip-icon" src={referenceFile?.icon ?? getUploadFileIcon(fileName)} alt="" />
                 <i className="iconfont icon-guanbi composer-reference-chip-close-icon" />
               </span>
               <span className="composer-reference-chip-name">{fileName}</span>
@@ -1762,7 +2976,7 @@ function App() {
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectMentionFile(file.name)}
               >
-                <img className="file-mention-icon" src={file.icon} alt="" />
+                <img className="file-mention-icon" src={getUploadFileIcon(file.name)} alt="" />
                 <span className="file-mention-name">{file.name}</span>
               </button>
             ))
@@ -1808,12 +3022,7 @@ function App() {
   const deleteFile = (fileName: string) => {
     setFiles((current) => current.filter((file) => file.name !== fileName));
     setComposerFiles((current) => current.filter((file) => file.source !== "reference" || file.name !== fileName));
-    setDraft((current) =>
-      current.replace(
-        new RegExp(`${COMPOSER_REFERENCE_START}${fileName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${COMPOSER_REFERENCE_END}`, "g"),
-        ""
-      )
-    );
+    setDraft((current) => removeComposerReferenceFromText(current, fileName));
     setOpenFileMenu(null);
     setOpenFileRenamePopover(null);
     setInlineFileRename(null);
@@ -1832,19 +3041,22 @@ function App() {
   const getFileDetailText = (fileName: string) => fileMarkdownByName[fileName] ?? DEFAULT_FILE_MARKDOWN;
 
   const downloadFile = (fileName: string) => {
-    const blob = new Blob([getFileDetailText(fileName)], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([getFileDetailText(fileName)], { type: getFileMimeType(fileName) });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = fileName;
+    link.rel = "noopener";
     document.body.appendChild(link);
-    link.click();
+    link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
     link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     setOpenFileMenu(null);
   };
 
   const markFileEditing = (fileName: string) => {
+    if (!isFileEditable(fileName)) return;
+
     setOpenFileMenu(null);
     setEditingFileName(fileName);
     setEditingFileDraft(getFileDetailText(fileName));
@@ -1861,7 +3073,7 @@ function App() {
           ? {
               ...file,
               name: nextName,
-              icon: getFileIcon(nextName)
+              icon: getFileCoverIcon(nextName)
             }
           : file
       )
@@ -1872,14 +3084,14 @@ function App() {
           ? {
               ...file,
               name: nextName,
-              icon: getFileIcon(nextName)
+              icon: getUploadFileIcon(nextName)
             }
           : file
       )
     );
     setDraft((current) =>
       current.replace(
-        new RegExp(`${COMPOSER_REFERENCE_START}${previousName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${COMPOSER_REFERENCE_END}`, "g"),
+        new RegExp(`${COMPOSER_REFERENCE_START}${escapeRegExp(previousName)}${COMPOSER_REFERENCE_END}`, "g"),
         `${COMPOSER_REFERENCE_START}${nextName}${COMPOSER_REFERENCE_END}`
       )
     );
@@ -1982,12 +3194,14 @@ function App() {
         role="menu"
         style={{ left: `${openFileMenu.left}px`, top: `${openFileMenu.top}px` }}
       >
-        <button type="button" className="file-card-menu-option" role="menuitem" onClick={() => markFileEditing(openFileMenu.fileName)}>
-          <span className="file-card-menu-icon" aria-hidden="true">
-            <Icon name="bianji" />
-          </span>
-          <span>编辑</span>
-        </button>
+        {isFileEditable(openFileMenu.fileName) ? (
+          <button type="button" className="file-card-menu-option" role="menuitem" onClick={() => markFileEditing(openFileMenu.fileName)}>
+            <span className="file-card-menu-icon" aria-hidden="true">
+              <Icon name="bianji" />
+            </span>
+            <span>编辑</span>
+          </button>
+        ) : null}
         <button type="button" className="file-card-menu-option" role="menuitem" onClick={() => downloadFile(openFileMenu.fileName)}>
           <span className="file-card-menu-icon" aria-hidden="true">
             <Icon name="xiazai" />
@@ -2062,7 +3276,7 @@ function App() {
       <aside className={isFilesPanelExpanded ? "files-panel expanded" : "files-panel"} aria-label="我的文件">
         <div className="files-panel-header">
           <div className="files-panel-title">
-            <img className="files-panel-title-icon" src={filePanelIcon} alt="" />
+            <img className="files-panel-title-icon" src={myFilesColorIcon} alt="" />
             <h3>我的文件</h3>
           </div>
           <div className="files-panel-header-actions">
@@ -2070,6 +3284,7 @@ function App() {
               type="button"
               className="icon-btn files-panel-action"
               aria-label={isFilesPanelExpanded ? "收起文件面板" : "展开文件面板"}
+              data-tooltip={isFilesPanelExpanded ? "缩小" : "放大"}
               onClick={() => setIsFilesPanelExpanded((current) => !current)}
             >
               <Icon name={isFilesPanelExpanded ? "shouqi" : "zhankai"} />
@@ -2092,6 +3307,13 @@ function App() {
         {activeFileDetail ? (
           <>
             <div className="files-detail-toolbar">
+              {(() => {
+                const isEditingActive = editingFileName === activeFileDetail.name;
+                const isActiveFileReferenced = referenceComposerFiles.some((file) => file.name === activeFileDetail.name);
+                const canEditActiveFile = isFileEditable(activeFileDetail.name);
+
+                return (
+                  <>
               <button
                 type="button"
                 className="icon-btn files-detail-back"
@@ -2137,59 +3359,87 @@ function App() {
                     <span className="files-detail-name" title={activeFileDetailDisplayName}>
                       {activeFileDetailDisplayName}
                     </span>
-                    <button
-                      type="button"
-                      className="icon-btn files-detail-icon-action"
-                      aria-label="重命名"
-                      onClick={() => startInlineFileRename(activeFileDetail.name)}
-                    >
-                      <Icon name="zhongmingming" />
-                    </button>
+                    {isEditingActive ? null : (
+                      <button
+                        type="button"
+                        className="icon-btn files-detail-icon-action"
+                        aria-label="重命名"
+                        onClick={() => startInlineFileRename(activeFileDetail.name)}
+                      >
+                        <Icon name="zhongmingming" />
+                      </button>
+                    )}
                   </>
                 )}
               </div>
-              <button
-                type="button"
-                className="icon-btn files-detail-icon-action"
-                aria-label={editingFileName === activeFileDetail.name ? "退出编辑" : "编辑"}
-                onClick={() => {
-                  if (editingFileName === activeFileDetail.name) {
-                    setEditingFileName(null);
-                    setEditingFileDraft("");
-                    return;
-                  }
+              {isEditingActive ? (
+                <div className="markdown-editor-actions">
+                  <button
+                    type="button"
+                    className="markdown-editor-button"
+                    onClick={() => {
+                      setEditingFileName(null);
+                      setEditingFileDraft("");
+                    }}
+                  >
+                    取消
+                  </button>
+                  <button type="button" className="markdown-editor-button primary" onClick={saveFileMarkdownEdit}>
+                    保存
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {canEditActiveFile ? (
+                    <button
+                      type="button"
+                      className="icon-btn files-detail-icon-action"
+                      aria-label="编辑"
+                      onClick={() => {
+                        markFileEditing(activeFileDetail.name);
+                      }}
+                    >
+                      <Icon name="bianji" />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="icon-btn files-detail-icon-action"
+                    aria-label="删除"
+                    onClick={() => deleteFile(activeFileDetail.name)}
+                  >
+                    <Icon name="shanchu" />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn files-detail-icon-action"
+                    aria-label="下载"
+                    onClick={() => downloadFile(activeFileDetail.name)}
+                  >
+                    <Icon name="xiazai" />
+                  </button>
+                  <button
+                    type="button"
+                    className={isActiveFileReferenced ? "files-detail-quote-button is-referenced" : "files-detail-quote-button"}
+                    aria-label={isActiveFileReferenced ? "取消引用" : "引用到会话"}
+                    aria-pressed={isActiveFileReferenced}
+                    onClick={() => {
+                      if (isActiveFileReferenced) {
+                        removeComposerReferenceByName(activeFileDetail.name);
+                        return;
+                      }
 
-                  markFileEditing(activeFileDetail.name);
-                }}
-              >
-                <Icon name="bianji" />
-              </button>
-              <button
-                type="button"
-                className="icon-btn files-detail-icon-action"
-                aria-label="删除"
-                onClick={() => deleteFile(activeFileDetail.name)}
-              >
-                <Icon name="shanchu" />
-              </button>
-              <button
-                type="button"
-                className="icon-btn files-detail-icon-action"
-                aria-label="下载"
-                onClick={() => downloadFile(activeFileDetail.name)}
-              >
-                <Icon name="xiazai" />
-              </button>
-              <button
-                type="button"
-                className="files-detail-quote-button"
-                onClick={() => {
-                  quoteFileToComposer(activeFileDetail.name);
-                }}
-              >
-                <Icon name="yinyongdaohuihua" />
-                <span>引用到会话</span>
-              </button>
+                      quoteFileToComposer(activeFileDetail.name);
+                    }}
+                  >
+                    <Icon name="yinyongdaohuihua" />
+                    <span>{isActiveFileReferenced ? "取消引用" : "引用到会话"}</span>
+                  </button>
+                </>
+              )}
+                  </>
+                );
+              })()}
             </div>
             <div
               className={
@@ -2199,33 +3449,13 @@ function App() {
               }
             >
               {editingFileName === activeFileDetail.name ? (
-                <>
-                  <div className="markdown-editor-toolbar">
-                    <span>Markdown 编辑模式</span>
-                    <div className="markdown-editor-actions">
-                      <button
-                        type="button"
-                        className="markdown-editor-button"
-                        onClick={() => {
-                          setEditingFileName(null);
-                          setEditingFileDraft("");
-                        }}
-                      >
-                        取消
-                      </button>
-                      <button type="button" className="markdown-editor-button primary" onClick={saveFileMarkdownEdit}>
-                        保存
-                      </button>
-                    </div>
-                  </div>
-                  <textarea
-                    className="markdown-editor-textarea"
-                    value={editingFileDraft}
-                    spellCheck={false}
-                    aria-label={`${activeFileDetail.name} Markdown 内容`}
-                    onChange={(event) => setEditingFileDraft(event.target.value)}
-                  />
-                </>
+                <textarea
+                  className="markdown-editor-textarea"
+                  value={editingFileDraft}
+                  spellCheck={false}
+                  aria-label={`${activeFileDetail.name} Markdown 内容`}
+                  onChange={(event) => setEditingFileDraft(event.target.value)}
+                />
               ) : (
                 <div
                   className="markdown-preview-inner"
@@ -2271,6 +3501,7 @@ function App() {
                     type="button"
                     className="icon-btn files-panel-action"
                     aria-label="搜索文件"
+                    data-tooltip="搜索"
                     onClick={() => setIsFilesSearchActive(true)}
                   >
                     <Icon name="sousuoneibu" />
@@ -2280,6 +3511,7 @@ function App() {
                   type="button"
                   className="icon-btn files-panel-action"
                   aria-label="上传文件"
+                  data-tooltip="上传文件"
                   onClick={() => filesPanelFileInputRef.current?.click()}
                 >
                   <Icon name="shangchuanwenjian" />
@@ -2331,6 +3563,7 @@ function App() {
                           type="button"
                           className="file-card-action"
                           aria-label="引用到会话"
+                          data-tooltip="引用"
                           onClick={(event) => {
                             event.stopPropagation();
                             quoteFileToComposer(file.name);
@@ -2395,8 +3628,7 @@ function App() {
         type="button"
         className={activeHistoryId === session.id ? "collapsed-history-item selected" : "collapsed-history-item"}
         onClick={() => {
-          setActiveHistoryId(session.id);
-          setIsNewChatActive(false);
+          openHistorySession(session);
           setOpenCollapsedPopover(null);
           setCollapsedTooltip(null);
         }}
@@ -2422,7 +3654,16 @@ function App() {
             <Icon name={isExpanded ? "jiantou_xiangxia" : "jiantou_xiangyou"} />
           </span>
         </button>
-        {isExpanded ? <div className="collapsed-history-list">{renderCollapsedHistoryItems(items)}</div> : null}
+        <div
+          className={
+            isExpanded
+              ? "history-collapse-shell collapsed-history-list-shell is-expanded"
+              : "history-collapse-shell collapsed-history-list-shell is-collapsed"
+          }
+          aria-hidden={!isExpanded}
+        >
+          <div className="collapsed-history-list">{renderCollapsedHistoryItems(items)}</div>
+        </div>
       </section>
     );
   };
@@ -2513,54 +3754,99 @@ function App() {
             <Icon name={isExpanded ? "jiantou_xiangxia" : "jiantou_xiangyou"} />
           </span>
         </button>
-        {isExpanded ? (
+        <div
+          className={
+            isExpanded
+              ? "history-collapse-shell history-group-items-shell is-expanded"
+              : "history-collapse-shell history-group-items-shell is-collapsed"
+          }
+          aria-hidden={!isExpanded}
+        >
           <div className="history-group-items">
             {items.map((session) => (
               <div
                 key={session.id}
-                className={
-                  openHistoryMenu?.sessionId === session.id
-                    ? "history-item-row menu-open"
-                    : "history-item-row"
-                }
+                className={[
+                  "history-item-row",
+                  openHistoryMenu?.sessionId === session.id ? "menu-open" : "",
+                  renamingHistory?.sessionId === session.id ? "is-renaming" : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               >
-                <button
-                  type="button"
-                  className={activeHistoryId === session.id ? "history-item selected" : "history-item"}
-                  onClick={() => {
-                    setActiveHistoryId(session.id);
-                    setIsNewChatActive(false);
-                    setOpenHistoryMenu(null);
-                  }}
-                >
-                  <span className="history-item-label">{session.title}</span>
-                </button>
-                <button
-                  type="button"
-                  className="history-item-more"
-                  aria-label="更多"
-                  aria-haspopup="menu"
-                  aria-expanded={openHistoryMenu?.sessionId === session.id}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    setOpenHistoryMenu((prev) =>
-                      prev?.sessionId === session.id
-                        ? null
-                        : {
-                            sessionId: session.id,
-                            left: rect.left,
-                            top: rect.bottom + 4
-                          }
-                    );
-                  }}
-                >
-                  <Icon name="gengduo" />
-                </button>
+                {renamingHistory?.sessionId === session.id ? (
+                  <form
+                    className="history-rename-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      confirmHistoryRename(session.id);
+                    }}
+                  >
+                    <input
+                      ref={historyRenameInputRef}
+                      className="history-rename-input"
+                      aria-label="重命名会话"
+                      value={renamingHistory.value}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setRenamingHistory((current) =>
+                          current?.sessionId === session.id ? { ...current, value: nextValue } : current
+                        );
+                      }}
+                      onBlur={() => {
+                        if (shouldSkipHistoryRenameBlurRef.current) {
+                          shouldSkipHistoryRenameBlurRef.current = false;
+                          return;
+                        }
+                        confirmHistoryRename(session.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Escape") return;
+                        event.preventDefault();
+                        cancelHistoryRename();
+                      }}
+                    />
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className={activeHistoryId === session.id ? "history-item selected" : "history-item"}
+                      onClick={() => {
+                        openHistorySession(session);
+                        setOpenHistoryMenu(null);
+                      }}
+                    >
+                      <span className="history-item-label">{session.title}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="history-item-more"
+                      aria-label="更多"
+                      aria-haspopup="menu"
+                      aria-expanded={openHistoryMenu?.sessionId === session.id}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setOpenHistoryMenu((prev) =>
+                          prev?.sessionId === session.id
+                            ? null
+                            : {
+                                sessionId: session.id,
+                                left: rect.left,
+                                top: rect.bottom + 4
+                              }
+                        );
+                      }}
+                    >
+                      <Icon name="gengduo" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
-        ) : null}
+        </div>
       </section>
     );
   };
@@ -2585,7 +3871,22 @@ function App() {
                     ? "展开侧边栏"
                     : "收起侧边栏"
               }
+              onMouseEnter={(event) =>
+                showCollapsedTooltip(
+                  isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏",
+                  event.currentTarget.getBoundingClientRect()
+                )
+              }
+              onMouseLeave={hideCollapsedTooltip}
+              onFocus={(event) =>
+                showCollapsedTooltip(
+                  isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏",
+                  event.currentTarget.getBoundingClientRect()
+                )
+              }
+              onBlur={hideCollapsedTooltip}
               onClick={() => {
+                setCollapsedTooltip(null);
                 if (isAutoCollapsed) return;
                 setCollapsed((prev) => !prev);
               }}
@@ -2777,6 +4078,10 @@ function App() {
                       : "icon-btn nav-icon secondary-nav-icon"
                   }
                   aria-label="我的文件"
+                  onMouseEnter={(event) => showCollapsedTooltip("我的文件", event.currentTarget.getBoundingClientRect())}
+                  onMouseLeave={hideCollapsedTooltip}
+                  onFocus={(event) => showCollapsedTooltip("我的文件", event.currentTarget.getBoundingClientRect())}
+                  onBlur={hideCollapsedTooltip}
                   onClick={() => toggleUtilityPanel("files")}
                 >
                   <Icon name="wodewenjian" />
@@ -2789,6 +4094,10 @@ function App() {
                       : "icon-btn nav-icon secondary-nav-icon"
                   }
                   aria-label="自动化"
+                  onMouseEnter={(event) => showCollapsedTooltip("自动化", event.currentTarget.getBoundingClientRect())}
+                  onMouseLeave={hideCollapsedTooltip}
+                  onFocus={(event) => showCollapsedTooltip("自动化", event.currentTarget.getBoundingClientRect())}
+                  onBlur={hideCollapsedTooltip}
                   onClick={() => toggleUtilityPanel("automation")}
                 >
                   <Icon name="zidonghua" />
@@ -2803,13 +4112,14 @@ function App() {
           </div>
         </div>
       </aside>
-      {isSidebarCollapsed ? renderCollapsedTooltip() : null}
+      {renderCollapsedTooltip()}
       {isSidebarCollapsed ? renderCollapsedPopover() : null}
 
       <main
         ref={mainRef}
         className={[
           "main",
+          hasConversation ? "has-conversation-mode" : "",
           activeUtilityPanel ? "has-utility-panel" : "",
           activeUtilityPanel === "files" && isFilesPanelExpanded ? "has-files-panel-expanded" : "",
           isFilesPanelResizing ? "is-files-panel-resizing" : ""
@@ -2826,51 +4136,402 @@ function App() {
           startSpotlightAnimation();
         }}
       >
-        <div key={activeAgent} className="main-content">
-          <section className="hero">
-            <h2>
-              您的专属<span>商业洞察员</span>，2分钟看透公司和市场趋势
-            </h2>
-          </section>
-
-          <section className="prompt-card">
-            <div className="tabs" ref={tabsRef}>
-              <div className="tabs-track" ref={tabsTrackRef}>
-                {TABS.map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    className={activeTab === tab.key ? "tab active" : "tab"}
-                    onClick={() => setActiveTab(tab.key)}
-                  >
-                  {tab.label}
-                </button>
-              ))}
-              </div>
-              {showTabsMore ? (
-                <button type="button" className="tabs-more" aria-label="查看更多分类" onClick={scrollPromptTabs}>
-                  <Icon name="jiantou_xiangyou" />
-                </button>
-              ) : null}
-            </div>
-            <div className="prompt-list">
-              {prompts.map((item, index) => (
+        <div
+          key={activeAgent}
+          className={hasConversation ? "main-content has-conversation" : "main-content"}
+          style={conversationContentStyle}
+        >
+          {hasConversation ? (
+            <>
+              <header className="conversation-page-header">
+                <h3>{buildConversationHeaderTitle(activeHistorySession?.title ?? activeRun?.question ?? "")}</h3>
                 <button
                   type="button"
-                  key={item}
-                  className={activePrompt === index ? "prompt-item active" : "prompt-item"}
+                  className={isCurrentSessionFavorite ? "chat-stage-header-action is-active" : "chat-stage-header-action"}
+                  aria-label={isCurrentSessionFavorite ? "取消收藏" : "收藏"}
+                  aria-pressed={isCurrentSessionFavorite}
+                  data-tooltip={isCurrentSessionFavorite ? "取消收藏" : "收藏"}
                   onClick={() => {
-                    setActivePrompt(index);
-                    setDraft(item);
-                    setFileMentionRange(null);
-                    setComposerFiles([]);
+                    if (!activeHistoryId) return;
+                    toggleFavoriteSession(activeHistoryId);
                   }}
                 >
-                  {item}
+                  <Icon name={isCurrentSessionFavorite ? "quxiaoshoucang" : "shoucang"} />
                 </button>
-              ))}
-            </div>
-          </section>
+              </header>
+              <section className="chat-stage">
+                <div
+                  className={isChatAtBottom ? "chat-stage-body is-at-bottom" : "chat-stage-body"}
+                  ref={chatStageBodyRef}
+                  onScroll={handleChatStageScroll}
+                  onWheel={markChatScrollInterrupted}
+                  onTouchMove={markChatScrollInterrupted}
+                  onPointerDown={(event) => {
+                    if (event.currentTarget === event.target) markChatScrollInterrupted();
+                  }}
+                >
+                  <div className="chat-stage-content">
+                    {conversationRuns.map((run) => {
+                      const isLatestRun = activeRun?.id === run.id;
+                      const runIsAnswerComplete =
+                        !run.isStopped &&
+                        run.stage === "done" &&
+                        run.conclusionVisibleLength >= run.conclusionMarkdown.length;
+                      const runFollowUpQuestions = buildFollowUpQuestions(activeAgent, run.question);
+
+                      return (
+                        <div key={run.id} className="chat-turn">
+                          <div className="chat-question-row">
+                            <span className="chat-time">刚刚</span>
+                            <div className="chat-question-bubble">{run.question}</div>
+                          </div>
+                          {run.responseStarted ? (
+                            <div className="chat-answer-row">
+                              <div className="chat-answer-meta">
+                                <span className="avatar">
+                                  <Icon name="huizhi" />
+                                </span>
+                                <span>{activeAgent}</span>
+                                <span className="chat-time">刚刚</span>
+                              </div>
+                              <div className="chat-thinking-card">
+                                {run.stage === "done" ? (
+                                  <div className="chat-thinking-summary-line">
+                                    <button
+                                      type="button"
+                                      className={run.isThinkingExpanded ? "chat-thinking-toggle expanded" : "chat-thinking-toggle"}
+                                      onClick={() =>
+                                        setConversationRuns((currentRuns) =>
+                                          currentRuns.map((item) =>
+                                            item.id === run.id
+                                              ? {
+                                                  ...item,
+                                                  isThinkingExpanded: !item.isThinkingExpanded
+                                                }
+                                              : item
+                                          )
+                                        )
+                                      }
+                                    >
+                                      <span className="chat-thinking-status">
+                                        {`全部工作已完成，耗时${formatRunElapsedSeconds(run)}s`}
+                                      </span>
+                                      <span className="chat-thinking-disclosure-icon" aria-hidden="true">
+                                        <Icon name={run.isThinkingExpanded ? "jiantou_xiangxia" : "jiantou_xiangyou"} />
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="chat-thinking-source-badge"
+                                      onClick={() => {
+                                        setIsExternalSourcesExpanded(true);
+                                        setIsSourceDrawerOpen(true);
+                                      }}
+                                    >
+                                      {`${Math.min(5, THINKING_CHAIN_STEPS.length)} 信息来源`}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="chat-thinking-status is-active">
+                                    {run.stage === "thinking" ? "正在思考..." : "正在处理中..."}
+                                  </div>
+                                )}
+                                {run.stage !== "thinking" ? (
+                                  <div
+                                    className={
+                                      run.stage === "done" && !run.isThinkingExpanded
+                                        ? "chat-thinking-flow-shell is-collapsed"
+                                        : "chat-thinking-flow-shell is-expanded"
+                                    }
+                                    aria-hidden={run.stage === "done" && !run.isThinkingExpanded}
+                                  >
+                                    <div className="chat-thinking-flow">
+                                      {THINKING_CHAIN_STEPS.slice(0, run.visibleSteps).map((step, index, steps) => {
+                                        const isLoading = run.stage !== "done" && index === steps.length - 1;
+                                        return (
+                                          <div key={step} className={isLoading ? "chat-thinking-step is-loading" : "chat-thinking-step"}>
+                                            <span className="chat-thinking-icon" aria-hidden="true">
+                                              {isLoading ? <LoadingSpinnerIcon /> : <Icon name={getThinkingStepIcon(step)} />}
+                                            </span>
+                                            <span>{step}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                              {run.stage === "done" ? (
+                                <section
+                                  className={
+                                    !run.isStopped && run.conclusionVisibleLength < run.conclusionMarkdown.length
+                                      ? "chat-conclusion is-streaming"
+                                      : "chat-conclusion"
+                                  }
+                                >
+                                  {renderMarkdown(run.conclusionMarkdown.slice(0, run.conclusionVisibleLength))}
+                                </section>
+                              ) : null}
+                              {runIsAnswerComplete && isLatestRun ? (
+                                <div className="chat-result-footer">
+                                  <div className="chat-result-actions" aria-label="结果操作">
+                                    <button
+                                      type="button"
+                                      className="chat-result-action"
+                                      aria-label="复制"
+                                      data-tooltip="复制"
+                                      onClick={() => void copyActiveAnswer(run)}
+                                    >
+                                      <Icon name="fuzhi_e792" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="chat-result-action"
+                                      aria-label="重新生成"
+                                      data-tooltip="重新生成"
+                                      onClick={() => regenerateActiveAnswer(run)}
+                                    >
+                                      <Icon name="shuaxin" />
+                                    </button>
+                                    {run.actionVariant === "resolution" ? (
+                                      <div
+                                        className={
+                                          answerResolutionFeedback
+                                            ? "chat-result-resolution has-selection"
+                                            : "chat-result-resolution"
+                                        }
+                                        aria-label="回答解决情况"
+                                      >
+                                        {isResolutionThanksVisible ? (
+                                          <span className="chat-result-resolution-thanks">谢谢你的反馈，我们会继续优化进步</span>
+                                        ) : (
+                                          <>
+                                            <span className="chat-result-resolution-text">是否有解决你的问题？</span>
+                                            <button
+                                              type="button"
+                                              className={
+                                                answerResolutionFeedback === "resolved"
+                                                  ? "chat-result-resolution-option is-active"
+                                                  : "chat-result-resolution-option"
+                                              }
+                                              aria-pressed={answerResolutionFeedback === "resolved"}
+                                              onClick={(event) => selectResolutionFeedback("resolved", event.currentTarget)}
+                                            >
+                                              <ResolutionIcon type="resolved" selected={answerResolutionFeedback === "resolved"} />
+                                              <span>解决了</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className={
+                                                answerResolutionFeedback === "partial"
+                                                  ? "chat-result-resolution-option is-active"
+                                                  : "chat-result-resolution-option"
+                                              }
+                                              aria-pressed={answerResolutionFeedback === "partial"}
+                                              onClick={(event) => selectResolutionFeedback("partial", event.currentTarget)}
+                                            >
+                                              <ResolutionIcon type="partial" selected={answerResolutionFeedback === "partial"} />
+                                              <span>部分解决</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className={
+                                                answerResolutionFeedback === "unresolved"
+                                                  ? "chat-result-resolution-option is-active"
+                                                  : "chat-result-resolution-option"
+                                              }
+                                              aria-pressed={answerResolutionFeedback === "unresolved"}
+                                              onClick={(event) => selectResolutionFeedback("unresolved", event.currentTarget)}
+                                            >
+                                              <ResolutionIcon type="unresolved" selected={answerResolutionFeedback === "unresolved"} />
+                                              <span>未解决</span>
+                                            </button>
+                                          </>
+                                        )}
+                                        {!isResolutionThanksVisible && pendingResolutionFeedback ? (
+                                          <form
+                                            className={`chat-resolution-popconfirm is-${resolutionPopconfirmPlacement}`}
+                                            aria-label="补充反馈"
+                                            onSubmit={(event) => {
+                                              event.preventDefault();
+                                              confirmResolutionFeedback();
+                                            }}
+                                          >
+                                            <div className="chat-resolution-popconfirm-arrow" aria-hidden="true" />
+                                            <div className="chat-resolution-popconfirm-body">
+                                              <div className="chat-resolution-reason-grid">
+                                                {DISLIKE_FEEDBACK_OPTIONS.map((reason) => (
+                                                  <label key={reason} className="chat-resolution-reason-option">
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={selectedResolutionReasons.includes(reason)}
+                                                      onChange={() => toggleResolutionReason(reason)}
+                                                    />
+                                                    <span>{reason}</span>
+                                                  </label>
+                                                ))}
+                                              </div>
+                                              <textarea
+                                                className="chat-resolution-popconfirm-textarea"
+                                                placeholder="其他我想吐槽的"
+                                                value={resolutionFeedbackText}
+                                                onChange={(event) => setResolutionFeedbackText(event.target.value)}
+                                              />
+                                              <div className="chat-resolution-popconfirm-footer">
+                                                <button
+                                                  type="button"
+                                                  className="chat-resolution-popconfirm-button secondary"
+                                                  onClick={closeResolutionPopconfirm}
+                                                >
+                                                  取消
+                                                </button>
+                                                <button type="submit" className="chat-resolution-popconfirm-button primary">
+                                                  确定
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </form>
+                                        ) : null}
+                                      </div>
+                                    ) : (
+                                      <>
+                                        {!isFeedbackDialogOpen && answerFeedback !== "disliked" ? (
+                                          <button
+                                            type="button"
+                                            className={
+                                              answerFeedback === "liked"
+                                                ? "chat-result-action is-feedback is-active"
+                                                : "chat-result-action is-feedback"
+                                            }
+                                            aria-label={answerFeedback === "liked" ? "取消点赞" : "点赞"}
+                                            aria-pressed={answerFeedback === "liked"}
+                                            data-tooltip="点赞"
+                                            onClick={toggleLikeFeedback}
+                                          >
+                                            <Icon name={answerFeedback === "liked" ? "dianzan_xuanzhong" : "dianzan"} />
+                                          </button>
+                                        ) : null}
+                                        {!isFeedbackDialogOpen && answerFeedback !== "liked" ? (
+                                          <button
+                                            type="button"
+                                            className={
+                                              answerFeedback === "disliked"
+                                                ? "chat-result-action is-feedback is-active"
+                                                : "chat-result-action is-feedback"
+                                            }
+                                            aria-label={answerFeedback === "disliked" ? "取消点踩" : "点踩"}
+                                            aria-pressed={answerFeedback === "disliked"}
+                                            data-tooltip="点踩"
+                                            onClick={toggleDislikeFeedback}
+                                          >
+                                            <Icon name={answerFeedback === "disliked" ? "diancai_xuanzhong" : "diancai"} />
+                                          </button>
+                                        ) : null}
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="chat-followups" aria-label="自动推荐问题">
+                                    {runFollowUpQuestions.map((question) => (
+                                      <button
+                                        key={question}
+                                        type="button"
+                                        className="chat-followup-chip"
+                                        onClick={() => fillFollowUpQuestion(question)}
+                                      >
+                                        <Icon name="tiaozhuan" />
+                                        <span>{question}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+              {shouldShowScrollToBottom ? (
+                <button
+                  type="button"
+                  className={
+                    isGeneratingResponse
+                      ? "chat-scroll-bottom-button is-outputting"
+                      : "chat-scroll-bottom-button"
+                  }
+                  aria-label="滚动到底部"
+                  onClick={scrollChatToBottom}
+                >
+                  <Icon name="jiantou_xiangxia" />
+                </button>
+              ) : null}
+              {renderSourceDrawer()}
+            </>
+          ) : (
+            <>
+              <section className="hero">
+                {activeAgent === "客户洞察" ? (
+                  <h2>
+                    <span>三分钟</span>看透目标客户，商机尽在掌握。
+                  </h2>
+                ) : activeAgent === "风险管理" ? (
+                  <h2>
+                    风险识别<span>早一步</span>，合作决策更稳妥
+                  </h2>
+                ) : activeAgent === "舆情监控" ? (
+                  <h2>
+                    舆情洞若观火，危机响应<span>快人一步</span>
+                  </h2>
+                ) : (
+                  <h2>
+                    您的专属<span>商业洞察员</span>，2分钟看透公司和市场趋势
+                  </h2>
+                )}
+              </section>
+
+              <section className="prompt-card">
+                <div className="tabs" ref={tabsRef}>
+                  <div className="tabs-track" ref={tabsTrackRef}>
+                    {visibleTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        className={activeTab === tab.key ? "tab active" : "tab"}
+                        onClick={() => setActiveTab(tab.key)}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                  {showTabsMore ? (
+                    <button type="button" className="tabs-more" aria-label="查看更多分类" onClick={scrollPromptTabs}>
+                      <Icon name="jiantou_xiangyou" />
+                    </button>
+                  ) : null}
+                </div>
+                <div className="prompt-list">
+                  {prompts.map((item, index) => (
+                    <button
+                      type="button"
+                      key={item}
+                      className={activePrompt === index ? "prompt-item active" : "prompt-item"}
+                      onClick={() => {
+                        setActivePrompt(index);
+                        setDraft(item);
+                        setFileMentionRange(null);
+                        setComposerFiles([]);
+                        window.requestAnimationFrame(() => textareaRef.current?.focus());
+                      }}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
 
           <section
             ref={composerRef}
@@ -2920,11 +4581,16 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className="send-btn"
-                  onClick={onSend}
-                  disabled={!getComposerPlainText(draft, composerFiles).trim() && uploadComposerFiles.length === 0}
+                  className={isGeneratingResponse ? "send-btn is-generating" : "send-btn"}
+                  onClick={isGeneratingResponse ? stopGeneratingResponse : onSend}
+                  disabled={
+                    !isGeneratingResponse &&
+                    !getComposerPlainText(draft, composerFiles).trim() &&
+                    uploadComposerFiles.length === 0
+                  }
+                  aria-label={isGeneratingResponse ? "停止生成" : "发送"}
                 >
-                  <Icon name="fasong" />
+                  <Icon name={isGeneratingResponse ? "tingzhi" : "fasong"} />
                 </button>
               </div>
             </div>
@@ -2943,6 +4609,7 @@ function App() {
       {renderUploadMenu()}
       {renderFileMenu()}
       {renderFileRenamePopover()}
+      {renderFeedbackDialog()}
     </div>
   );
 }

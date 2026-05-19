@@ -180,25 +180,23 @@
   --moss-button-disabled-text: var(--colorTextDisabled);
 
   --moss-composer-bg: var(--surface-base);
-  --moss-composer-border: var(--colorFillTertiary);
-  --moss-composer-border-hover: var(--colorFill);
-  --moss-composer-border-focus: var(--colorFill);
+  --moss-composer-border: var(--colorBorderSecondary);
+  --moss-composer-border-hover: var(--colorBorderPrimary);
+  --moss-composer-border-focus: var(--colorBorderPrimary);
   --moss-composer-text: var(--colorTextHeading);
   --moss-composer-placeholder: var(--colorTextDescription);
   --moss-composer-placeholder-rest: var(--colorTextPlaceholder);
   --moss-composer-disabled: var(--surface-disabled);
   --moss-composer-shadow-normal:
-    0 0 0 0.5px rgba(31, 31, 30, 0.15),
-    0 4px 20px rgba(0, 0, 0, 0.04);
+    0 4px 20px rgba(11, 11, 11, 0.04);
   --moss-composer-shadow-focus:
-    0 0 0 0.5px rgba(31, 31, 30, 0.3),
-    0 4px 20px rgba(0, 0, 0, 0.08);
+    0 4px 20px rgba(11, 11, 11, 0.08);
   --moss-composer-send-bg: var(--brand-primary);
   --moss-composer-send-bg-hover: var(--colorPrimaryHover);
   --moss-composer-send-bg-active: var(--colorPrimaryActive);
   --moss-composer-send-text: var(--colorWhite);
   --moss-composer-stop-bg: var(--colorBlack);
-  --moss-composer-stop-bg-hover: var(--colorZero);
+  --moss-composer-stop-bg-hover: var(--colorPrimaryHover);
   --moss-composer-stop-text: var(--colorWhite);
   --moss-composer-upload-bg-hover: var(--colorBgTextNormalHover);
   --moss-composer-upload-bg-active: var(--colorBgTextNormalActive);

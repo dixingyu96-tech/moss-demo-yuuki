@@ -158,8 +158,8 @@
   --shadow-line: var(--colorBgShape);
   --shadow-soft: rgba(11, 11, 11, 0.06);
 
-  --dot-base: color-mix(in srgb, var(--color-neutral-light-3) 86%, transparent);
-  --dot-active: color-mix(in srgb, var(--color-neutral-light-6) 52%, transparent);
+  --dot-base: color-mix(in srgb, var(--color-neutral-light-4) 86%, transparent);
+  --dot-active: color-mix(in srgb, var(--color-neutral-light-7) 52%, transparent);
   --mask-strong: var(--color-neutral-alpha-light-11);
   --mask-medium: color-mix(in srgb, var(--color-neutral-light-11) 64%, transparent);
   --mask-soft: color-mix(in srgb, var(--color-neutral-light-11) 26%, transparent);
