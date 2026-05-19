@@ -2862,7 +2862,7 @@ function App() {
             className={file.isUploading ? "composer-file-tag uploading" : "composer-file-tag"}
             style={{ "--upload-progress": `${file.uploadProgress ?? 100}%` } as CSSProperties}
           >
-            <img className="composer-file-tag-icon" src={file.icon} alt="" />
+            <img className="composer-file-tag-icon" src={getUploadFileIcon(file.name)} alt="" />
             <span className="composer-file-tag-content">
               <span className="composer-file-tag-name">{file.name}</span>
               {file.size ? <span className="composer-file-tag-size">{file.size}</span> : null}
