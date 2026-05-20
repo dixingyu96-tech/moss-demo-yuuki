@@ -332,17 +332,6 @@ export const PALETTE_COLORS = {
   "coral-red-light-9": "#8E2626",
   "coral-red-light-10": "#641919",
   "coral-red-light-11": "#3C0E0E",
-  "neutral-alpha-light-1": "rgba(11, 11, 11, 0)",
-  "neutral-alpha-light-2": "rgba(11, 11, 11, 0.07)",
-  "neutral-alpha-light-3": "rgba(11, 11, 11, 0.11)",
-  "neutral-alpha-light-4": "rgba(11, 11, 11, 0.15)",
-  "neutral-alpha-light-5": "rgba(11, 11, 11, 0.19)",
-  "neutral-alpha-light-6": "rgba(11, 11, 11, 0.37)",
-  "neutral-alpha-light-7": "rgba(11, 11, 11, 0.47)",
-  "neutral-alpha-light-8": "rgba(11, 11, 11, 0.66)",
-  "neutral-alpha-light-9": "rgba(11, 11, 11, 0.78)",
-  "neutral-alpha-light-10": "rgba(11, 11, 11, 0.9)",
-  "neutral-alpha-light-11": "rgba(11, 11, 11, 1)",
 } as const;
 
 export type PaletteColorKey = keyof typeof PALETTE_COLORS;

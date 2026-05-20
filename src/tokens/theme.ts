@@ -134,20 +134,11 @@ export const THEME_TOKENS = {
   },
   boxShadow: {
     subtle: "0 0 2px 0 rgba(11, 11, 11, 0.02), 0 1px 4px 0 rgba(11, 11, 11, 0.06)",
-    normal: "0 0 2px 0 rgba(11, 11, 11, 0.02), 0 4px 8px 0 rgba(11, 11, 11, 0.06), 0 4px 24px 6px rgba(11, 11, 11, 0.04)",
+    shadow: "0 0 2px 0 rgba(11, 11, 11, 0.02), 0 4px 8px 0 rgba(11, 11, 11, 0.06), 0 4px 24px 6px rgba(11, 11, 11, 0.04)",
     secondary: "0 0 6px 0 rgba(11, 11, 11, 0.05), 0 4px 12px 0 rgba(11, 11, 11, 0.06), 0 4px 24px 6px rgba(11, 11, 11, 0.04)",
-    tertiary: "0 0 5px 0 rgba(11, 11, 11, 0.06), 0 10px 24px -2px rgba(11, 11, 11, 0.1)",
-    outline: "0 0 0 2px rgba(11, 11, 11, 0.15)",
+    tertiary: "0 0 5px 0 var(--color-shadow-alpha-4), 0 10px 24px -2px var(--color-shadow-alpha-5), 0 10px 48px 12px var(--color-shadow-alpha-2)",
     warningOutline: "0 0 0 2px rgba(245, 169, 39, 0.1)",
-    errorOutline: "0 0 0 2px rgba(239, 86, 85, 0.12)",
-    card: "0 0 6px 0 rgba(11, 11, 11, 0.08)",
-    "light-mini": "0 0 6px 0 rgba(11, 11, 11, 0.04)",
-    "light-small": "0 4px 12px 0 rgba(11, 11, 11, 0.08)",
-    "light-large": "0 6px 20px 0 rgba(11, 11, 11, 0.16)",
-    "light-medium": "0 2px 6px 2px rgba(0, 0, 0, 0.06)",
-    interactive: "0 0 2px 0 rgba(11, 11, 11, 0.02), 0 4px 8px 0 rgba(11, 11, 11, 0.06), 0 4px 24px 6px rgba(11, 11, 11, 0.04)",
-    primary: "0 0 0 2px rgba(11, 11, 11, 0.15)",
-    "tertiary-small": "0 0 5px 0 rgba(11, 11, 11, 0.06), 0 10px 24px -2px rgba(11, 11, 11, 0.1)"
+    errorOutline: "0 0 0 2px rgba(239, 86, 85, 0.12)"
   },
   textColor: {
     default: "var(--colorText)",

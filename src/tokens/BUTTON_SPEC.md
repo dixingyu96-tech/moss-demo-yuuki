@@ -20,7 +20,6 @@
   - `.file-rename-button.secondary`
 - 菜单按钮（文本容器型按钮，对齐统一尺寸与排版）
   - `.history-item-menu-option`
-  - `.upload-menu-option`
   - `.file-card-menu-option`
 
 ## 说明

@@ -21,6 +21,7 @@ import fileCoverImageIcon from "./assets/文件封面_pic.png";
 import fileCoverMdIcon from "./assets/文件封面_md.png";
 import fileCoverPdfIcon from "./assets/文件封面_pdf.png";
 import fileCoverPptIcon from "./assets/文件封面_ppt.png";
+import fileCoverUnknownIcon from "./assets/文件封面_未知文件.png";
 import fileCoverVideoIcon from "./assets/文件封面_video.png";
 import fileCoverXlsIcon from "./assets/文件封面_xls.png";
 import uploadFileArchiveIcon from "./assets/上传文件_zip.png";
@@ -30,6 +31,7 @@ import uploadFileImageIcon from "./assets/上传文件_pic.png";
 import uploadFileMdIcon from "./assets/上传文件_md.png";
 import uploadFilePdfIcon from "./assets/上传文件_pdf.png";
 import uploadFilePptIcon from "./assets/上传文件_ppt.png";
+import uploadFileUnknownIcon from "./assets/上传文件_未知文件.png";
 import uploadFileVideoIcon from "./assets/上传文件_video.png";
 import uploadFileXlsIcon from "./assets/上传文件_xls.png";
 import resolutionPartialSelectedIcon from "./assets/满意度_部分解决_选中.png";
@@ -129,6 +131,16 @@ type AnswerFeedback = "liked" | "disliked" | null;
 type AnswerResolutionFeedback = "resolved" | "partial" | "unresolved" | null;
 type ResolutionPopconfirmValue = Extract<AnswerResolutionFeedback, "partial" | "unresolved">;
 type ResolutionPopconfirmPlacement = "top" | "bottom";
+type ResolutionPopconfirmPosition = {
+  left: number;
+  top: number;
+  arrowLeft: number;
+  placement: ResolutionPopconfirmPlacement;
+} | null;
+type GlobalToastState = {
+  id: number;
+  message: string;
+} | null;
 
 const COMPOSER_REFERENCE_START = "\u2063";
 const COMPOSER_REFERENCE_END = "\u2064";
@@ -246,13 +258,14 @@ const FILE_CARD_MENU_WIDTH = 112;
 const CONCLUSION_STREAM_MIN_CHUNK_SIZE = 3;
 const CONCLUSION_STREAM_MAX_CHUNK_SIZE = 9;
 const CHAT_BOTTOM_THRESHOLD = 24;
-const THINKING_CHAIN_STEPS = [
+const DEFAULT_THINKING_CHAIN_STEPS = [
   "阅读 \"skills/customer-insight/SKILL.md\"",
-  "MOSS-企业分支机构",
+  "解析问题意图：客户洞察",
+  "MOSS-企业画像库：帆软软件",
   "MOSS-AI搜索：帆软软件",
   "搜索网络：帆软软件",
-  "加载设计规范",
-  "绘制“帆软软件股权结构”"
+  "交叉验证公开来源",
+  "生成销售拓客速读"
 ];
 const DEFAULT_FOLLOW_UP_QUESTIONS = [
   "继续拆解关键部门与负责人，生成下一步拜访清单",
@@ -333,16 +346,139 @@ function getHistorySessionQuestion(session: HistorySession) {
   return session.question ?? session.title;
 }
 
-function getStableActionVariant(seed: string): ConversationRun["actionVariant"] {
+function getStableHash(seed: string) {
   let hash = 0;
   for (let index = 0; index < seed.length; index += 1) {
     hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
   }
+  return hash;
+}
+
+function getStableActionVariant(seed: string): ConversationRun["actionVariant"] {
+  const hash = getStableHash(seed);
   return hash % 2 === 0 ? "resolution" : "feedback";
 }
 
 function createActionVariant(): ConversationRun["actionVariant"] {
   return Math.random() < 0.5 ? "resolution" : "feedback";
+}
+
+function inferCompanyName(question: string) {
+  const normalized = buildSessionTitle(question);
+  const explicitCompany = normalized.match(/([\u4e00-\u9fa5A-Za-z0-9]{2,24}(?:集团|公司|软件|银行|科技|股份|有限|华润|帆软|FineReport|FineBI))/)?.[1];
+  if (explicitCompany) return explicitCompany;
+  if (/帆软|FineReport|FineBI/i.test(normalized)) return "帆软软件";
+  if (/华润/.test(normalized)) return "华润集团";
+  return "目标客户";
+}
+
+function inferThinkingTopic(question: string) {
+  if (/销售额|营收|收入|财务|利润|年报|上市/.test(question)) return "财务与经营表现";
+  if (/行业|客户|集中|分布|画像|客群/.test(question)) return "客户行业分布";
+  if (/竞争|竞品|对手|替代/.test(question)) return "竞争格局";
+  if (/规划|战略|未来|发展|五年|趋势/.test(question)) return "发展规划";
+  if (/年龄|员工|同事|团队|组织|负责人/.test(question)) return "组织与关键人";
+  if (/风险|尽调|合规|供应商|合作/.test(question)) return "风险尽调";
+  if (/舆情|投诉|危机|负面|口碑/.test(question)) return "舆情监控";
+  return "销售拓客洞察";
+}
+
+function buildThinkingChainSteps(agent: AgentKey, question: string) {
+  if (!buildSessionTitle(question)) return DEFAULT_THINKING_CHAIN_STEPS;
+
+  const companyName = inferCompanyName(question);
+  const topic = inferThinkingTopic(question);
+  const hash = getStableHash(`${agent}-${question}`);
+  const skillPath =
+    agent === "风险管理"
+      ? "skills/risk-management/SKILL.md"
+      : agent === "舆情监控"
+        ? "skills/public-opinion/SKILL.md"
+        : "skills/customer-insight/SKILL.md";
+  const openingSteps = [`阅读 "${skillPath}"`, `解析问题意图：${topic}`];
+  const scenarioSteps: Record<string, string[]> = {
+    财务与经营表现: [
+      `MOSS-企业经营库：${companyName}`,
+      `MOSS-财务指标检索：${companyName}`,
+      `搜索网络：${companyName} 销售额 营收`,
+      "交叉核验年报、新闻与公开披露",
+      "提炼收入口径与可信度说明"
+    ],
+    客户行业分布: [
+      `MOSS-客户案例库：${companyName}`,
+      `MOSS-行业样本聚类：${companyName}`,
+      `搜索网络：${companyName} 客户 行业 分布`,
+      "归并客户行业标签与典型场景",
+      "生成销售切入优先级"
+    ],
+    竞争格局: [
+      `MOSS-竞品图谱：${companyName}`,
+      `MOSS-AI搜索：${companyName} 竞争对手`,
+      `搜索网络：${companyName} 替代产品 竞品`,
+      "对比产品能力、客群与价格带",
+      "输出竞争应对要点"
+    ],
+    发展规划: [
+      `MOSS-战略动态库：${companyName}`,
+      `MOSS-AI搜索：${companyName} 未来规划`,
+      `搜索网络：${companyName} 战略 发展 规划`,
+      "梳理管理层表态与业务扩张线索",
+      "推演未来机会与合作窗口"
+    ],
+    组织与关键人: [
+      `MOSS-组织与人员库：${companyName}`,
+      `MOSS-AI搜索：${companyName} 员工 团队`,
+      `搜索网络：${companyName} 招聘 管理层`,
+      "估算组织结构与岗位年龄线索",
+      "整理关键部门与拜访路径"
+    ],
+    风险尽调: [
+      `MOSS-企业风险库：${companyName}`,
+      `MOSS-司法与合规检索：${companyName}`,
+      `搜索网络：${companyName} 风险 合规 舆情`,
+      "识别高风险事件与影响范围",
+      "生成风险等级与缓释建议"
+    ],
+    舆情监控: [
+      `MOSS-舆情信号库：${companyName}`,
+      `MOSS-AI搜索：${companyName} 投诉 负面`,
+      `搜索网络：${companyName} 舆情 危机`,
+      "聚合近24小时高敏感信号",
+      "生成响应优先级与话术建议"
+    ],
+    销售拓客洞察: [
+      `MOSS-企业画像库：${companyName}`,
+      `MOSS-AI搜索：${companyName}`,
+      `搜索网络：${companyName}`,
+      "交叉验证公开来源",
+      "生成销售拓客速读"
+    ]
+  };
+  const optionalSteps = [
+    "加载行业口径与指标规范",
+    "过滤低可信来源与重复信息",
+    "补充可落地拜访动作",
+    "整理引用来源与证据链"
+  ];
+  const selectedOptionalStep = optionalSteps[hash % optionalSteps.length];
+
+  return [...openingSteps, ...(scenarioSteps[topic] ?? scenarioSteps.销售拓客洞察), selectedOptionalStep];
+}
+
+function getThinkingStartDelay(run: ConversationRun) {
+  return 720 + (getStableHash(`${run.id}-start`) % 420);
+}
+
+function getThinkingTransitionDelay(run: ConversationRun) {
+  return 1800 + (getStableHash(`${run.question}-transition`) % 900);
+}
+
+function getThinkingStepDelay(run: ConversationRun) {
+  return 880 + (getStableHash(`${run.id}-${run.visibleSteps}`) % 620);
+}
+
+function getThinkingFinishDelay(run: ConversationRun) {
+  return 1200 + (getStableHash(`${run.id}-finish`) % 700);
 }
 
 function deriveHistoryCategory(timestamp: string): HistoryCategory {
@@ -588,7 +724,9 @@ function removeComposerReferenceFromText(text: string, fileName: string) {
   );
 }
 
-function getFileType(fileName: string) {
+type FileType = "archive" | "doc" | "html" | "image" | "md" | "pdf" | "ppt" | "unknown" | "video" | "xls";
+
+function getFileType(fileName: string): FileType {
   const extension = fileName.split(".").pop()?.toLowerCase();
   if (["doc", "docx"].includes(extension ?? "")) return "doc";
   if (["md", "markdown"].includes(extension ?? "")) return "md";
@@ -599,12 +737,12 @@ function getFileType(fileName: string) {
   if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(extension ?? "")) return "archive";
   if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tif", "tiff"].includes(extension ?? "")) return "image";
   if (["mp4", "mov", "avi", "mkv", "webm", "wmv", "flv"].includes(extension ?? "")) return "video";
-  return "doc";
+  return "unknown";
 }
 
 function getFileCoverIcon(fileName: string) {
   const fileType = getFileType(fileName);
-  const iconMap = {
+  const iconMap: Record<FileType, string> = {
     archive: fileCoverArchiveIcon,
     doc: fileCoverDocIcon,
     html: fileCoverHtmlIcon,
@@ -612,6 +750,7 @@ function getFileCoverIcon(fileName: string) {
     md: fileCoverMdIcon,
     pdf: fileCoverPdfIcon,
     ppt: fileCoverPptIcon,
+    unknown: fileCoverUnknownIcon,
     video: fileCoverVideoIcon,
     xls: fileCoverXlsIcon
   };
@@ -621,7 +760,7 @@ function getFileCoverIcon(fileName: string) {
 
 function getUploadFileIcon(fileName: string) {
   const fileType = getFileType(fileName);
-  const iconMap = {
+  const iconMap: Record<FileType, string> = {
     archive: uploadFileArchiveIcon,
     doc: uploadFileDocIcon,
     html: uploadFileHtmlIcon,
@@ -629,6 +768,7 @@ function getUploadFileIcon(fileName: string) {
     md: uploadFileMdIcon,
     pdf: uploadFilePdfIcon,
     ppt: uploadFilePptIcon,
+    unknown: uploadFileUnknownIcon,
     video: uploadFileVideoIcon,
     xls: uploadFileXlsIcon
   };
@@ -1042,7 +1182,14 @@ const RESOLUTION_DEFAULT_ICON_NAMES: Record<"resolved" | "partial" | "unresolved
 
 function ResolutionIcon({ type, selected = false }: { type: "resolved" | "partial" | "unresolved"; selected?: boolean }) {
   if (selected) {
-    return <img className="chat-resolution-icon chat-resolution-icon-selected" src={RESOLUTION_SELECTED_ICONS[type]} alt="" />;
+    return (
+      <img
+        className="chat-resolution-icon chat-resolution-icon-selected"
+        src={RESOLUTION_SELECTED_ICONS[type]}
+        alt=""
+        data-resolution-selected-icon={`满意度_${type}`}
+      />
+    );
   }
 
   return (
@@ -1085,10 +1232,10 @@ function LoadingSpinnerIcon() {
 
 function getThinkingStepIcon(step: string) {
   if (step.includes("阅读")) return "yuedu";
+  if (step.includes("解析") || step.includes("过滤") || step.includes("整理")) return "jiazaishejiguifan";
   if (step.includes("搜索网络") || step.includes("AI搜索")) return "sousuowaibu";
-  if (step.includes("加载设计规范")) return "jiazaishejiguifan";
-  if (step.includes("分支机构")) return "sousuoneibu";
-  if (step.includes("绘制")) return "huizhi";
+  if (step.includes("MOSS-")) return "sousuoneibu";
+  if (step.includes("生成") || step.includes("输出") || step.includes("提炼") || step.includes("推演")) return "huizhi";
   return "gongju";
 }
 
@@ -1107,8 +1254,7 @@ function App() {
   const [answerFeedback, setAnswerFeedback] = useState<AnswerFeedback>(null);
   const [answerResolutionFeedback, setAnswerResolutionFeedback] = useState<AnswerResolutionFeedback>(null);
   const [pendingResolutionFeedback, setPendingResolutionFeedback] = useState<ResolutionPopconfirmValue | null>(null);
-  const [resolutionPopconfirmPlacement, setResolutionPopconfirmPlacement] =
-    useState<ResolutionPopconfirmPlacement>("bottom");
+  const [resolutionPopconfirmPosition, setResolutionPopconfirmPosition] = useState<ResolutionPopconfirmPosition>(null);
   const [selectedResolutionReasons, setSelectedResolutionReasons] = useState<string[]>([]);
   const [resolutionFeedbackText, setResolutionFeedbackText] = useState("");
   const [isResolutionThanksVisible, setIsResolutionThanksVisible] = useState(false);
@@ -1146,10 +1292,10 @@ function App() {
   const [isExternalSourcesExpanded, setIsExternalSourcesExpanded] = useState(true);
   const [selectedFeedbackReasons, setSelectedFeedbackReasons] = useState<string[]>([]);
   const [feedbackText, setFeedbackText] = useState("");
-  const [openUploadMenu, setOpenUploadMenu] = useState<FloatingPointState>(null);
   const [openFileMenu, setOpenFileMenu] = useState<FileMenuState>(null);
   const [openFileRenamePopover, setOpenFileRenamePopover] = useState<FileRenamePopoverState>(null);
   const [uploadTooltip, setUploadTooltip] = useState<FloatingPointState>(null);
+  const [globalToast, setGlobalToast] = useState<GlobalToastState>(null);
   const mainRef = useRef<HTMLElement | null>(null);
   const spotlightFrameRef = useRef<number | null>(null);
   const spotlightCurrentRef = useRef({ x: 0, y: 0, opacity: 0 });
@@ -1157,7 +1303,6 @@ function App() {
   const historyMenuRef = useRef<HTMLDivElement | null>(null);
   const historyRenameInputRef = useRef<HTMLInputElement | null>(null);
   const shouldSkipHistoryRenameBlurRef = useRef(false);
-  const uploadMenuRef = useRef<HTMLDivElement | null>(null);
   const fileMenuRef = useRef<HTMLDivElement | null>(null);
   const fileRenamePopoverRef = useRef<HTMLFormElement | null>(null);
   const fileRenameInputRef = useRef<HTMLInputElement | null>(null);
@@ -1177,6 +1322,7 @@ function App() {
   const filesSearchInputRef = useRef<HTMLInputElement | null>(null);
   const tabsRef = useRef<HTMLDivElement | null>(null);
   const tabsTrackRef = useRef<HTMLDivElement | null>(null);
+  const globalToastTimerRef = useRef<number | null>(null);
 
   const activeAgent = AGENTS[activeAgentIndex];
   const visibleTabs = useMemo(() => {
@@ -1504,6 +1650,9 @@ function App() {
     return () => {
       Object.values(uploadProgressTimersRef.current).forEach((timerId) => window.clearInterval(timerId));
       uploadProgressTimersRef.current = {};
+      if (globalToastTimerRef.current !== null) {
+        window.clearTimeout(globalToastTimerRef.current);
+      }
     };
   }, []);
 
@@ -1512,14 +1661,12 @@ function App() {
       const target = event.target as Node;
 
       if (historyMenuRef.current?.contains(target)) return;
-      if (uploadMenuRef.current?.contains(target)) return;
       if (fileMenuRef.current?.contains(target)) return;
       if (fileRenamePopoverRef.current?.contains(target)) return;
       if (uploadButtonRef.current?.contains(target)) return;
       if (collapsedPopoverRef.current?.contains(target)) return;
 
       setOpenHistoryMenu(null);
-      setOpenUploadMenu(null);
       setOpenFileMenu(null);
       setOpenFileRenamePopover(null);
       setUploadTooltip(null);
@@ -1601,34 +1748,6 @@ function App() {
       window.removeEventListener("scroll", closePopover, true);
     };
   }, [openCollapsedPopover]);
-
-  useEffect(() => {
-    if (!openUploadMenu) return;
-
-    const focusFrame = window.requestAnimationFrame(() => {
-      uploadMenuRef.current?.querySelector<HTMLButtonElement>(".upload-menu-option")?.focus();
-    });
-
-    const closeUploadMenu = () => {
-      setOpenUploadMenu(null);
-      setUploadTooltip(null);
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      closeUploadMenu();
-    };
-
-    document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", closeUploadMenu);
-    window.addEventListener("scroll", closeUploadMenu, true);
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", closeUploadMenu);
-      window.removeEventListener("scroll", closeUploadMenu, true);
-    };
-  }, [openUploadMenu]);
 
   useEffect(() => {
     if (!openFileMenu) return;
@@ -1753,12 +1872,12 @@ function App() {
             responseStarted: true
           };
         });
-      }, 520);
+      }, getThinkingStartDelay(activeRun));
 
       return () => window.clearTimeout(startTimerId);
     }
 
-    const totalSteps = THINKING_CHAIN_STEPS.length;
+    const totalSteps = buildThinkingChainSteps(activeAgent, activeRun.question).length;
 
     if (activeRun.stage === "thinking") {
       const thinkingTimerId = window.setTimeout(() => {
@@ -1769,7 +1888,7 @@ function App() {
             stage: "processing"
           };
         });
-      }, 1400);
+      }, getThinkingTransitionDelay(activeRun));
 
       return () => window.clearTimeout(thinkingTimerId);
     }
@@ -1793,10 +1912,10 @@ function App() {
         }
         return current;
       });
-    }, activeRun.visibleSteps < totalSteps ? 620 : 900);
+    }, activeRun.visibleSteps < totalSteps ? getThinkingStepDelay(activeRun) : getThinkingFinishDelay(activeRun));
 
     return () => window.clearTimeout(timerId);
-  }, [activeRun]);
+  }, [activeRun, activeAgent]);
 
   useEffect(() => {
     if (!activeRun || activeRun.stage !== "done") return;
@@ -2073,8 +2192,41 @@ function App() {
 
   const closeResolutionPopconfirm = () => {
     setPendingResolutionFeedback(null);
+    setResolutionPopconfirmPosition(null);
     setSelectedResolutionReasons([]);
     setResolutionFeedbackText("");
+  };
+
+  const getResolutionPopconfirmPosition = (triggerElement: HTMLButtonElement): Exclude<ResolutionPopconfirmPosition, null> => {
+    const triggerRect = triggerElement.getBoundingClientRect();
+    const popconfirmWidth = 300;
+    const estimatedPopconfirmHeight = 214;
+    const safePadding = 8;
+    const triggerGap = 8;
+    const triggerCenterX = triggerRect.left + triggerRect.width / 2;
+    const maxLeft = Math.max(safePadding, window.innerWidth - popconfirmWidth - safePadding);
+    const left = clamp(triggerCenterX - popconfirmWidth / 2, safePadding, maxLeft);
+    const composerTop = composerRef.current?.getBoundingClientRect().top;
+    const bottomBoundary =
+      typeof composerTop === "number" && composerTop > triggerRect.bottom
+        ? Math.min(window.innerHeight - safePadding, composerTop - safePadding)
+        : window.innerHeight - safePadding;
+    const bottomTop = triggerRect.bottom + triggerGap;
+    const spaceBelow = bottomBoundary - bottomTop;
+    const spaceAbove = triggerRect.top - safePadding - triggerGap;
+    const placement: ResolutionPopconfirmPlacement =
+      spaceBelow < estimatedPopconfirmHeight && spaceAbove > spaceBelow ? "top" : "bottom";
+    const top =
+      placement === "top"
+        ? Math.max(safePadding, triggerRect.top - triggerGap - estimatedPopconfirmHeight)
+        : Math.min(bottomTop, window.innerHeight - estimatedPopconfirmHeight - safePadding);
+
+    return {
+      left,
+      top,
+      arrowLeft: clamp(triggerCenterX - left, 14, popconfirmWidth - 14),
+      placement
+    };
   };
 
   const selectResolutionFeedback = (
@@ -2092,14 +2244,7 @@ function App() {
     }
 
     if (triggerElement && typeof window !== "undefined") {
-      const triggerRect = triggerElement.getBoundingClientRect();
-      const estimatedPopconfirmHeight = 214;
-      const safeGap = 24;
-      const spaceBelow = window.innerHeight - triggerRect.bottom;
-      const spaceAbove = triggerRect.top;
-      setResolutionPopconfirmPlacement(
-        spaceBelow < estimatedPopconfirmHeight + safeGap && spaceAbove > spaceBelow ? "top" : "bottom"
-      );
+      setResolutionPopconfirmPosition(getResolutionPopconfirmPosition(triggerElement));
     }
 
     setPendingResolutionFeedback(value);
@@ -2135,16 +2280,106 @@ function App() {
     setFeedbackText("");
   };
 
+  const showGlobalToast = (message: string) => {
+    if (globalToastTimerRef.current !== null) {
+      window.clearTimeout(globalToastTimerRef.current);
+    }
+
+    setGlobalToast({
+      id: Date.now(),
+      message
+    });
+
+    globalToastTimerRef.current = window.setTimeout(() => {
+      setGlobalToast(null);
+      globalToastTimerRef.current = null;
+    }, 1800);
+  };
+
+  const writeMarkdownToClipboard = async (markdown: string) => {
+    const writePlainTextWithSelection = () => {
+      const textarea = document.createElement("textarea");
+      textarea.value = markdown;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.top = "-9999px";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    };
+
+    if (!navigator.clipboard) {
+      writePlainTextWithSelection();
+      return;
+    }
+
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/markdown": new Blob([markdown], { type: "text/markdown" }),
+            "text/plain": new Blob([markdown], { type: "text/plain" })
+          })
+        ]);
+        return;
+      } catch {
+        // Some browsers reject custom clipboard MIME types; plain markdown text still supports direct paste.
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(markdown);
+    } catch {
+      writePlainTextWithSelection();
+    }
+  };
+
   const copyActiveAnswer = async (run = activeRun) => {
     if (!run) return;
 
-    await navigator.clipboard?.writeText(run.conclusionMarkdown);
+    await writeMarkdownToClipboard(run.conclusionMarkdown);
+    showGlobalToast("复制成功");
   };
 
   const regenerateActiveAnswer = (run = activeRun) => {
     if (!run) return;
 
-    submitQuestion(run.question);
+    const now = new Date().toISOString();
+    shouldFollowChatRef.current = true;
+    hasUserInterruptedChatScrollRef.current = false;
+    setIsChatAtBottom(true);
+    setAnswerFeedback(null);
+    setAnswerResolutionFeedback(null);
+    setIsFeedbackDialogOpen(false);
+    setSelectedFeedbackReasons([]);
+    setFeedbackText("");
+    setPendingResolutionFeedback(null);
+    setResolutionPopconfirmPosition(null);
+    setSelectedResolutionReasons([]);
+    setResolutionFeedbackText("");
+    setIsResolutionThanksVisible(false);
+    setIsSourceDrawerOpen(false);
+
+    setConversationRuns((currentRuns) =>
+      currentRuns.map((currentRun) =>
+        currentRun.id === run.id
+          ? {
+              ...currentRun,
+              createdAt: now,
+              completedAt: undefined,
+              conclusionMarkdown: buildConversationConclusionMarkdown(activeAgent, currentRun.question),
+              conclusionVisibleLength: 0,
+              stage: "thinking",
+              visibleSteps: 0,
+              responseStarted: false,
+              isThinkingExpanded: true,
+              isStopped: false
+            }
+          : currentRun
+      )
+    );
   };
 
   const fillFollowUpQuestion = (question: string) => {
@@ -2217,7 +2452,7 @@ function App() {
       conclusionMarkdown,
       conclusionVisibleLength: conclusionMarkdown.length,
       stage: "done",
-      visibleSteps: THINKING_CHAIN_STEPS.length,
+      visibleSteps: buildThinkingChainSteps(activeAgent, question).length,
       responseStarted: true,
       isThinkingExpanded: false,
       isStopped: false,
@@ -2375,7 +2610,6 @@ function App() {
   };
 
   const showUploadTooltip = (rect: DOMRect) => {
-    if (openUploadMenu) return;
     setUploadTooltip({
       left: rect.left + rect.width / 2,
       top: rect.top - 4
@@ -2454,9 +2688,30 @@ function App() {
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
+  const addFilesToFilesPanel = (uploadedFiles: File[]) => {
+    if (uploadedFiles.length === 0) return;
+
+    setFiles((current) => {
+      const existingNames = new Set(current.map((file) => file.name.toLowerCase()));
+      const appended = uploadedFiles.map((file) => {
+        const uniqueName = getUniqueFileName(file.name, existingNames);
+        existingNames.add(uniqueName.toLowerCase());
+        return {
+          name: uniqueName,
+          size: formatFileSize(file.size),
+          icon: getFileCoverIcon(uniqueName)
+        };
+      });
+
+      return [...appended, ...current];
+    });
+  };
+
   const onUploadFiles = (event: ReactChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(event.target.files ?? []);
     const existingUploadNames = new Set(uploadComposerFiles.map((file) => file.name));
+
+    addFilesToFilesPanel(uploadedFiles);
 
     uploadedFiles.forEach((file) => {
       if (existingUploadNames.has(file.name)) return;
@@ -2476,7 +2731,6 @@ function App() {
     });
 
     event.target.value = "";
-    setOpenUploadMenu(null);
     setUploadTooltip(null);
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   };
@@ -2485,33 +2739,10 @@ function App() {
     const uploadedFiles = Array.from(event.target.files ?? []);
     if (uploadedFiles.length === 0) return;
 
-    setFiles((current) => {
-      const existingNames = new Set(current.map((file) => file.name.toLowerCase()));
-      const appended = uploadedFiles.map((file) => {
-        const uniqueName = getUniqueFileName(file.name, existingNames);
-        existingNames.add(uniqueName.toLowerCase());
-        return {
-          name: uniqueName,
-          size: formatFileSize(file.size),
-          icon: getFileCoverIcon(uniqueName)
-        };
-      });
-
-      return [...appended, ...current];
-    });
-
+    addFilesToFilesPanel(uploadedFiles);
     event.target.value = "";
     setIsFilesSearchActive(false);
     setFilesSearchQuery("");
-  };
-
-  const openUploadMenuAtButton = (event: ReactMouseEvent<HTMLButtonElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setUploadTooltip(null);
-    setOpenUploadMenu({
-      left: rect.left,
-      top: rect.bottom + 4
-    });
   };
 
   const renderUploadTooltip = () => {
@@ -2519,46 +2750,7 @@ function App() {
 
     return createPortal(
       <div className="upload-tooltip" style={{ left: `${uploadTooltip.left}px`, top: `${uploadTooltip.top}px` }}>
-        上传
-      </div>,
-      document.body
-    );
-  };
-
-  const renderUploadMenu = () => {
-    if (!openUploadMenu) return null;
-
-    return createPortal(
-      <div
-        ref={uploadMenuRef}
-        className="upload-menu"
-        role="menu"
-        style={{ left: `${openUploadMenu.left}px`, top: `${openUploadMenu.top}px` }}
-      >
-        <button
-          type="button"
-          className="upload-menu-option"
-          role="menuitem"
-          onClick={() => {
-            fileInputRef.current?.click();
-            setOpenUploadMenu(null);
-          }}
-        >
-          <Icon name="shangchuanwenjian" />
-          <span>上传文件</span>
-        </button>
-        <button
-          type="button"
-          className="upload-menu-option"
-          role="menuitem"
-          onClick={() => {
-            setActiveUtilityPanel("files");
-            setOpenUploadMenu(null);
-          }}
-        >
-          <Icon name="xuanzewodewenjian" />
-          <span>选择我的文件</span>
-        </button>
+        上传文件
       </div>,
       document.body
     );
@@ -2682,6 +2874,73 @@ function App() {
           </div>
         </form>
       </div>,
+      document.body
+    );
+  };
+
+  const renderGlobalToast = () => {
+    if (!globalToast) return null;
+
+    return createPortal(
+      <div key={globalToast.id} className="global-toast" role="status" aria-live="polite">
+        <span className="global-toast-icon" aria-hidden="true">
+          <Icon name="toasttishi_chenggong_mian" />
+        </span>
+        <span className="global-toast-message">{globalToast.message}</span>
+      </div>,
+      document.body
+    );
+  };
+
+  const renderResolutionPopconfirm = () => {
+    if (isResolutionThanksVisible || !pendingResolutionFeedback || !resolutionPopconfirmPosition) return null;
+
+    return createPortal(
+      <form
+        className={`chat-resolution-popconfirm is-${resolutionPopconfirmPosition.placement}`}
+        aria-label="补充反馈"
+        style={
+          {
+            left: `${resolutionPopconfirmPosition.left}px`,
+            top: `${resolutionPopconfirmPosition.top}px`,
+            "--chat-resolution-arrow-left": `${resolutionPopconfirmPosition.arrowLeft}px`
+          } as CSSProperties
+        }
+        onSubmit={(event) => {
+          event.preventDefault();
+          confirmResolutionFeedback();
+        }}
+      >
+        <div className="chat-resolution-popconfirm-arrow" aria-hidden="true" />
+        <div className="chat-resolution-popconfirm-body">
+          <div className="chat-resolution-reason-grid">
+            {DISLIKE_FEEDBACK_OPTIONS.map((reason) => (
+              <label key={reason} className="chat-resolution-reason-option">
+                <input
+                  type="checkbox"
+                  checked={selectedResolutionReasons.includes(reason)}
+                  onChange={() => toggleResolutionReason(reason)}
+                />
+                <span>{reason}</span>
+              </label>
+            ))}
+          </div>
+          <textarea
+            className="chat-resolution-popconfirm-textarea"
+            placeholder="其他我想吐槽的"
+            value={resolutionFeedbackText}
+            onChange={(event) => setResolutionFeedbackText(event.target.value)}
+          />
+          <div className="chat-resolution-popconfirm-footer">
+            <button type="button" className="chat-resolution-popconfirm-button secondary" onClick={closeResolutionPopconfirm}>
+              取消
+            </button>
+            <button type="submit" className="chat-resolution-popconfirm-button primary">
+              确定
+            </button>
+          </div>
+        </div>
+      </form>,
       document.body
     );
   };
@@ -3432,7 +3691,7 @@ function App() {
                       quoteFileToComposer(activeFileDetail.name);
                     }}
                   >
-                    <Icon name="yinyongdaohuihua" />
+                    <Icon name={isActiveFileReferenced ? "quxiaoyinyong" : "yinyongdaohuihua"} />
                     <span>{isActiveFileReferenced ? "取消引用" : "引用到会话"}</span>
                   </button>
                 </>
@@ -3527,75 +3786,84 @@ function App() {
               </div>
             </div>
             <div className="files-grid">
-              {visibleFiles.map((file) => (
-                <div
-                  key={file.name}
-                  className={openFileMenu?.fileName === file.name ? "file-card menu-open" : "file-card"}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setActiveFileDetailName(file.name);
-                    setEditingFileName(null);
-                    setEditingFileDraft("");
-                    setOpenFileMenu(null);
-                    setIsFilesSearchActive(false);
-                    setFilesSearchQuery("");
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") return;
-                    event.preventDefault();
-                    setActiveFileDetailName(file.name);
-                    setEditingFileName(null);
-                    setEditingFileDraft("");
-                    setOpenFileMenu(null);
-                    setIsFilesSearchActive(false);
-                    setFilesSearchQuery("");
-                  }}
-                >
-                  <span className="file-card-preview">
-                    <img src={file.icon} alt="" />
-                  </span>
-                  <span className="file-card-meta">
-                    <span className="file-card-title-row">
-                      <span className="file-card-name">{renderHighlightedFileName(file.name, filesSearchQuery)}</span>
-                      <span className="file-card-actions" aria-label={`${file.name} 操作`}>
-                        <button
-                          type="button"
-                          className="file-card-action"
-                          aria-label="引用到会话"
-                          data-tooltip="引用"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            quoteFileToComposer(file.name);
-                          }}
-                        >
-                          <Icon name="yinyongdaohuihua" />
-                        </button>
-                        <button
-                          type="button"
-                          className="file-card-action"
-                          aria-label="更多"
-                          aria-haspopup="menu"
-                          aria-expanded={openFileMenu?.fileName === file.name}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            const rect = event.currentTarget.getBoundingClientRect();
-                            const position = getFileCardMenuPosition(rect);
-                            setOpenFileMenu({
-                              fileName: file.name,
-                              left: position.left,
-                              top: position.top
-                            });
-                          }}
-                        >
-                          <Icon name="gengduo" />
-                        </button>
-                      </span>
+              {visibleFiles.map((file) => {
+                const isFileReferenced = referenceComposerFiles.some((item) => item.name === file.name);
+                const quoteActionLabel = isFileReferenced ? "取消引用" : "引用文件";
+
+                return (
+                  <div
+                    key={file.name}
+                    className={openFileMenu?.fileName === file.name ? "file-card menu-open" : "file-card"}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      setActiveFileDetailName(file.name);
+                      setEditingFileName(null);
+                      setEditingFileDraft("");
+                      setOpenFileMenu(null);
+                      setIsFilesSearchActive(false);
+                      setFilesSearchQuery("");
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      setActiveFileDetailName(file.name);
+                      setEditingFileName(null);
+                      setEditingFileDraft("");
+                      setOpenFileMenu(null);
+                      setIsFilesSearchActive(false);
+                      setFilesSearchQuery("");
+                    }}
+                  >
+                    <span className="file-card-preview">
+                      <img src={file.icon} alt="" />
                     </span>
-                    <span className="file-card-size">{file.size}</span>
-                  </span>
-                </div>
-              ))}
+                    <span className="file-card-meta">
+                      <span className="file-card-title-row">
+                        <span className="file-card-name">{renderHighlightedFileName(file.name, filesSearchQuery)}</span>
+                        <span className="file-card-actions" aria-label={`${file.name} 操作`}>
+                          <button
+                            type="button"
+                            className="file-card-action"
+                            aria-label={quoteActionLabel}
+                            data-tooltip={quoteActionLabel}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (isFileReferenced) {
+                                removeComposerReferenceByName(file.name);
+                                return;
+                              }
+                              quoteFileToComposer(file.name);
+                            }}
+                          >
+                            <Icon name={isFileReferenced ? "quxiaoyinyong" : "yinyongdaohuihua"} />
+                          </button>
+                          <button
+                            type="button"
+                            className="file-card-action"
+                            aria-label="更多"
+                            aria-haspopup="menu"
+                            aria-expanded={openFileMenu?.fileName === file.name}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              const rect = event.currentTarget.getBoundingClientRect();
+                              const position = getFileCardMenuPosition(rect);
+                              setOpenFileMenu({
+                                fileName: file.name,
+                                left: position.left,
+                                top: position.top
+                              });
+                            }}
+                          >
+                            <Icon name="gengduo" />
+                          </button>
+                        </span>
+                      </span>
+                      <span className="file-card-size">{file.size}</span>
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
@@ -4178,6 +4446,7 @@ function App() {
                         run.stage === "done" &&
                         run.conclusionVisibleLength >= run.conclusionMarkdown.length;
                       const runFollowUpQuestions = buildFollowUpQuestions(activeAgent, run.question);
+                      const runThinkingSteps = buildThinkingChainSteps(activeAgent, run.question);
 
                       return (
                         <div key={run.id} className="chat-turn">
@@ -4228,7 +4497,7 @@ function App() {
                                         setIsSourceDrawerOpen(true);
                                       }}
                                     >
-                                      {`${Math.min(5, THINKING_CHAIN_STEPS.length)} 信息来源`}
+                                      {`${Math.min(5, runThinkingSteps.length)} 信息来源`}
                                     </button>
                                   </div>
                                 ) : (
@@ -4246,7 +4515,7 @@ function App() {
                                     aria-hidden={run.stage === "done" && !run.isThinkingExpanded}
                                   >
                                     <div className="chat-thinking-flow">
-                                      {THINKING_CHAIN_STEPS.slice(0, run.visibleSteps).map((step, index, steps) => {
+                                      {runThinkingSteps.slice(0, run.visibleSteps).map((step, index, steps) => {
                                         const isLoading = run.stage !== "done" && index === steps.length - 1;
                                         return (
                                           <div key={step} className={isLoading ? "chat-thinking-step is-loading" : "chat-thinking-step"}>
@@ -4348,50 +4617,6 @@ function App() {
                                             </button>
                                           </>
                                         )}
-                                        {!isResolutionThanksVisible && pendingResolutionFeedback ? (
-                                          <form
-                                            className={`chat-resolution-popconfirm is-${resolutionPopconfirmPlacement}`}
-                                            aria-label="补充反馈"
-                                            onSubmit={(event) => {
-                                              event.preventDefault();
-                                              confirmResolutionFeedback();
-                                            }}
-                                          >
-                                            <div className="chat-resolution-popconfirm-arrow" aria-hidden="true" />
-                                            <div className="chat-resolution-popconfirm-body">
-                                              <div className="chat-resolution-reason-grid">
-                                                {DISLIKE_FEEDBACK_OPTIONS.map((reason) => (
-                                                  <label key={reason} className="chat-resolution-reason-option">
-                                                    <input
-                                                      type="checkbox"
-                                                      checked={selectedResolutionReasons.includes(reason)}
-                                                      onChange={() => toggleResolutionReason(reason)}
-                                                    />
-                                                    <span>{reason}</span>
-                                                  </label>
-                                                ))}
-                                              </div>
-                                              <textarea
-                                                className="chat-resolution-popconfirm-textarea"
-                                                placeholder="其他我想吐槽的"
-                                                value={resolutionFeedbackText}
-                                                onChange={(event) => setResolutionFeedbackText(event.target.value)}
-                                              />
-                                              <div className="chat-resolution-popconfirm-footer">
-                                                <button
-                                                  type="button"
-                                                  className="chat-resolution-popconfirm-button secondary"
-                                                  onClick={closeResolutionPopconfirm}
-                                                >
-                                                  取消
-                                                </button>
-                                                <button type="submit" className="chat-resolution-popconfirm-button primary">
-                                                  确定
-                                                </button>
-                                              </div>
-                                            </div>
-                                          </form>
-                                        ) : null}
                                       </div>
                                     ) : (
                                       <>
@@ -4567,15 +4792,16 @@ function App() {
                 <button
                   ref={uploadButtonRef}
                   type="button"
-                  className={openUploadMenu ? "icon-btn add active" : "icon-btn add"}
-                  aria-label="上传"
-                  aria-haspopup="menu"
-                  aria-expanded={Boolean(openUploadMenu)}
+                  className="icon-btn add"
+                  aria-label="上传文件"
                   onMouseEnter={(event) => showUploadTooltip(event.currentTarget.getBoundingClientRect())}
                   onMouseLeave={hideUploadTooltip}
                   onFocus={(event) => showUploadTooltip(event.currentTarget.getBoundingClientRect())}
                   onBlur={hideUploadTooltip}
-                  onClick={openUploadMenuAtButton}
+                  onClick={() => {
+                    setUploadTooltip(null);
+                    fileInputRef.current?.click();
+                  }}
                 >
                   <Icon name="tianjia" />
                 </button>
@@ -4606,10 +4832,11 @@ function App() {
           })
         : null}
       {renderUploadTooltip()}
-      {renderUploadMenu()}
       {renderFileMenu()}
       {renderFileRenamePopover()}
       {renderFeedbackDialog()}
+      {renderGlobalToast()}
+      {renderResolutionPopconfirm()}
     </div>
   );
 }

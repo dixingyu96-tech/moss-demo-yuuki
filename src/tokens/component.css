@@ -187,10 +187,8 @@
   --moss-composer-placeholder: var(--colorTextDescription);
   --moss-composer-placeholder-rest: var(--colorTextPlaceholder);
   --moss-composer-disabled: var(--surface-disabled);
-  --moss-composer-shadow-normal:
-    0 4px 20px rgba(11, 11, 11, 0.04);
-  --moss-composer-shadow-focus:
-    0 4px 20px rgba(11, 11, 11, 0.08);
+  --moss-composer-shadow-normal: var(--shadow-subtle);
+  --moss-composer-shadow-focus: var(--shadow);
   --moss-composer-send-bg: var(--brand-primary);
   --moss-composer-send-bg-hover: var(--colorPrimaryHover);
   --moss-composer-send-bg-active: var(--colorPrimaryActive);
@@ -202,11 +200,6 @@
   --moss-composer-upload-bg-active: var(--colorBgTextNormalActive);
   --moss-composer-upload-text: var(--colorIconNormal);
   --moss-composer-upload-text-hover: var(--colorIconActive);
-  --moss-composer-upload-menu-bg: var(--colorBgElevated);
-  --moss-composer-upload-menu-radius: var(--radius-lg);
-  --moss-composer-upload-menu-shadow: var(--shadow-secondary);
-  --moss-composer-upload-menu-width: 130px;
-  --moss-composer-upload-menu-padding: var(--padding-xs);
   --moss-composer-upload-tooltip-bg: var(--colorBgSpotlight);
   --moss-composer-upload-tooltip-text: var(--colorWhite);
   --moss-composer-file-tag-bg: var(--color-shadow-alpha-2);
@@ -251,12 +244,12 @@
   --moss-files-panel-resizer-hit-width: var(--spacing-4xl);
   --moss-files-panel-resizer-hit-offset: var(--padding-xxxl);
   --moss-files-panel-resizer-line-width: 1px;
-  --moss-files-panel-resizer-color: var(--color-neutral-alpha-light-6);
+  --moss-files-panel-resizer-color: var(--color-black-alpha-light-8);
   --moss-files-panel-bg: var(--colorBgContainer);
   --moss-files-panel-border: var(--colorFillQuaternary);
   --moss-files-panel-divider: var(--colorBorderSecondary);
   --moss-files-panel-shadow: var(--shadow-subtle);
-  --moss-files-panel-radius: var(--radius-sm);
+  --moss-files-panel-radius: var(--radius);
   --moss-files-panel-header-height: 56px;
   --moss-files-panel-card-min-width: 220px;
   --moss-files-panel-card-max-width: 320px;

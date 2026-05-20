@@ -193,18 +193,7 @@ const legacyAliases = {
   ...Object.fromEntries(Array.from({ length: 11 }, (_, index) => [`sea-green-light-${index + 1}`, palette[`duck-green-light-${index + 1}`]])),
   ...Object.fromEntries(Array.from({ length: 11 }, (_, index) => [`sky-blue-light-${index + 1}`, palette[`cyan-light-${index + 1}`]])),
   ...Object.fromEntries(Array.from({ length: 11 }, (_, index) => [`cornflower-blue-light-${index + 1}`, palette[`indigo-light-${index + 1}`]])),
-  ...Object.fromEntries(Array.from({ length: 11 }, (_, index) => [`coral-red-light-${index + 1}`, palette[`red-light-${index + 1}`]])),
-  "neutral-alpha-light-1": "rgba(11, 11, 11, 0)",
-  "neutral-alpha-light-2": "rgba(11, 11, 11, 0.07)",
-  "neutral-alpha-light-3": "rgba(11, 11, 11, 0.11)",
-  "neutral-alpha-light-4": "rgba(11, 11, 11, 0.15)",
-  "neutral-alpha-light-5": "rgba(11, 11, 11, 0.19)",
-  "neutral-alpha-light-6": "rgba(11, 11, 11, 0.37)",
-  "neutral-alpha-light-7": "rgba(11, 11, 11, 0.47)",
-  "neutral-alpha-light-8": "rgba(11, 11, 11, 0.66)",
-  "neutral-alpha-light-9": "rgba(11, 11, 11, 0.78)",
-  "neutral-alpha-light-10": "rgba(11, 11, 11, 0.9)",
-  "neutral-alpha-light-11": "rgba(11, 11, 11, 1)"
+  ...Object.fromEntries(Array.from({ length: 11 }, (_, index) => [`coral-red-light-${index + 1}`, palette[`red-light-${index + 1}`]]))
 };
 
 Object.assign(palette, legacyAliases);
@@ -226,7 +215,26 @@ const orderedPaletteKeys = [
 ];
 
 function cssVarsFromObject(groupName, values) {
-  return Object.entries(values).map(([key, value]) => `  --${groupName}-${key}: ${value};`);
+  return Object.entries(values).map(([key, value]) => {
+    const normalizedValue = groupName === "shadow" ? normalizeShadowCssValue(value) : value;
+    const varName = groupName === "shadow" && key === "shadow" ? "--shadow" : `--${groupName}-${key}`;
+    return `  ${varName}: ${normalizedValue};`;
+  });
+}
+
+function normalizeShadowCssValue(value) {
+  const shadowAlphaVars = {
+    "rgba(11, 11, 11, 0.02)": "var(--color-shadow-alpha-1)",
+    "rgba(11, 11, 11, 0.04)": "var(--color-shadow-alpha-2)",
+    "rgba(11, 11, 11, 0.05)": "var(--color-shadow-alpha-3)",
+    "rgba(11, 11, 11, 0.06)": "var(--color-shadow-alpha-4)",
+    "rgba(11, 11, 11, 0.1)": "var(--color-shadow-alpha-5)"
+  };
+
+  return Object.entries(shadowAlphaVars).reduce(
+    (current, [rawColor, token]) => current.replaceAll(rawColor, token),
+    value
+  );
 }
 
 function toPxMap(input) {
@@ -374,20 +382,11 @@ const height = {
 const shadowColor = (shadowName, colorName) => colorToCss(getToken(["🔵基础", "盒子阴影", shadowName, colorName]));
 const boxShadow = {
   subtle: `0 0 2px 0 ${shadowColor("boxShadowSubtle", "Color 1")}, 0 1px 4px 0 ${shadowColor("boxShadowSubtle", "Color 2")}`,
-  normal: `0 0 2px 0 ${shadowColor("boxShadow", "Color 1")}, 0 4px 8px 0 ${shadowColor("boxShadow", "Color 2")}, 0 4px 24px 6px ${shadowColor("boxShadow", "Color 3")}`,
+  shadow: `0 0 2px 0 ${shadowColor("boxShadow", "Color 1")}, 0 4px 8px 0 ${shadowColor("boxShadow", "Color 2")}, 0 4px 24px 6px ${shadowColor("boxShadow", "Color 3")}`,
   secondary: `0 0 6px 0 ${shadowColor("boxShadowSecondary", "Color 1")}, 0 4px 12px 0 ${shadowColor("boxShadowSecondary", "Color 2")}, 0 4px 24px 6px ${shadowColor("boxShadowSecondary", "Color 3")}`,
-  tertiary: `0 0 5px 0 ${shadowColor("boxShadowTertiary", "Color 1")}, 0 10px 24px -2px ${shadowColor("boxShadowTertiary", "Color 2")}`,
-  outline: `0 0 0 ${lineWidth.outline} ${cssColor(findTokenByName("colorControlOutline"))}`,
+  tertiary: "0 0 5px 0 var(--color-shadow-alpha-4), 0 10px 24px -2px var(--color-shadow-alpha-5), 0 10px 48px 12px var(--color-shadow-alpha-2)",
   warningOutline: `0 0 0 ${lineWidth.outline} ${cssColor(findTokenByName("colorControlWarningOutline"))}`,
-  errorOutline: `0 0 0 ${lineWidth.outline} ${cssColor(findTokenByName("colorControlErrorOutline"))}`,
-  card: "0 0 6px 0 rgba(11, 11, 11, 0.08)",
-  "light-mini": "0 0 6px 0 rgba(11, 11, 11, 0.04)",
-  "light-small": "0 4px 12px 0 rgba(11, 11, 11, 0.08)",
-  "light-large": "0 6px 20px 0 rgba(11, 11, 11, 0.16)",
-  "light-medium": "0 2px 6px 2px rgba(0, 0, 0, 0.06)",
-  interactive: `0 0 2px 0 ${shadowColor("boxShadow", "Color 1")}, 0 4px 8px 0 ${shadowColor("boxShadow", "Color 2")}, 0 4px 24px 6px ${shadowColor("boxShadow", "Color 3")}`,
-  primary: `0 0 0 ${lineWidth.outline} ${cssColor(findTokenByName("colorControlOutline"))}`,
-  "tertiary-small": `0 0 5px 0 ${shadowColor("boxShadowTertiary", "Color 1")}, 0 10px 24px -2px ${shadowColor("boxShadowTertiary", "Color 2")}`
+  errorOutline: `0 0 0 ${lineWidth.outline} ${cssColor(findTokenByName("colorControlErrorOutline"))}`
 };
 
 const textColor = {
@@ -553,7 +552,7 @@ semanticLines.push(
   "",
   "  --dot-base: color-mix(in srgb, var(--color-neutral-light-3) 86%, transparent);",
   "  --dot-active: color-mix(in srgb, var(--color-neutral-light-6) 52%, transparent);",
-  "  --mask-strong: var(--color-neutral-alpha-light-11);",
+  "  --mask-strong: var(--color-black-alpha-light-1);",
   "  --mask-medium: color-mix(in srgb, var(--color-neutral-light-11) 64%, transparent);",
   "  --mask-soft: color-mix(in srgb, var(--color-neutral-light-11) 26%, transparent);",
   "  --mask-faint: color-mix(in srgb, var(--color-neutral-light-11) 16%, transparent);",

@@ -6,48 +6,6 @@
   "description": "",
   "glyphs": [
     {
-      "icon_id": "47603406",
-      "name": "html",
-      "font_class": "html",
-      "unicode": "e7e8",
-      "unicode_decimal": 59368
-    },
-    {
-      "icon_id": "47603405",
-      "name": "json",
-      "font_class": "json",
-      "unicode": "e7e9",
-      "unicode_decimal": 59369
-    },
-    {
-      "icon_id": "47603404",
-      "name": "css",
-      "font_class": "css",
-      "unicode": "e7ea",
-      "unicode_decimal": 59370
-    },
-    {
-      "icon_id": "47603409",
-      "name": "markdown",
-      "font_class": "markdown",
-      "unicode": "e7e5",
-      "unicode_decimal": 59365
-    },
-    {
-      "icon_id": "47603408",
-      "name": "tsx",
-      "font_class": "tsx",
-      "unicode": "e7e6",
-      "unicode_decimal": 59366
-    },
-    {
-      "icon_id": "47603407",
-      "name": "pic",
-      "font_class": "pic",
-      "unicode": "e7e7",
-      "unicode_decimal": 59367
-    },
-    {
       "icon_id": "47603394",
       "name": "取消引用",
       "font_class": "quxiaoyinyong",
@@ -140,8 +98,8 @@
     },
     {
       "icon_id": "47570689",
-      "name": "关闭",
-      "font_class": "guanbi1",
+      "name": "esc",
+      "font_class": "esc",
       "unicode": "e7d4",
       "unicode_decimal": 59348
     },

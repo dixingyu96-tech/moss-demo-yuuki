@@ -160,7 +160,7 @@
 
   --dot-base: color-mix(in srgb, var(--color-neutral-light-4) 86%, transparent);
   --dot-active: color-mix(in srgb, var(--color-neutral-light-7) 52%, transparent);
-  --mask-strong: var(--color-neutral-alpha-light-11);
+  --mask-strong: var(--color-black-alpha-light-1);
   --mask-medium: color-mix(in srgb, var(--color-neutral-light-11) 64%, transparent);
   --mask-soft: color-mix(in srgb, var(--color-neutral-light-11) 26%, transparent);
   --mask-faint: color-mix(in srgb, var(--color-neutral-light-11) 16%, transparent);
