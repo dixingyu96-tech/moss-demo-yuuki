@@ -800,6 +800,10 @@ textarea {
   gap: var(--gap-md);
 }
 
+.collapsed-popover-stack {
+  gap: 0;
+}
+
 .collapsed-popover-item,
 .collapsed-history-item {
   width: 100%;
