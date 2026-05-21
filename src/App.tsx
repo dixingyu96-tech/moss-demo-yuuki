@@ -34,6 +34,10 @@ import uploadFilePptIcon from "./assets/上传文件_ppt.png";
 import uploadFileUnknownIcon from "./assets/上传文件_未知文件.png";
 import uploadFileVideoIcon from "./assets/上传文件_video.png";
 import uploadFileXlsIcon from "./assets/上传文件_xls.png";
+import agentOpportunityMiningIcon from "./assets/商机挖掘.png";
+import agentCustomerInsightIcon from "./assets/客户洞察.png";
+import agentPublicOpinionIcon from "./assets/舆情监控.png";
+import agentRiskManagementIcon from "./assets/风险管理.png";
 import resolutionPartialSelectedIcon from "./assets/满意度_部分解决_选中.png";
 import resolutionResolvedSelectedIcon from "./assets/满意度_已解决_选中.png";
 import resolutionUnresolvedSelectedIcon from "./assets/满意度_未解决_选中.png";
@@ -113,6 +117,7 @@ type FileItem = {
   size: string;
   icon: string;
 };
+type FilesPanelScope = "all" | "current";
 type ConversationRun = {
   id: string;
   question: string;
@@ -234,6 +239,26 @@ const OPPORTUNITY_MINING_PROMPTS: Partial<PromptMap> = {
 const AGENTS = ["客户洞察", "风险管理", "舆情监控"] as const;
 type AgentKey = (typeof AGENTS)[number];
 type AgentHistoryMap = Record<AgentKey, HistorySession[]>;
+type SidebarAgentName = AgentKey | "商机挖掘";
+type SidebarAgentItem = {
+  name: SidebarAgentName;
+  icon: string;
+  disabled?: boolean;
+};
+
+const SIDEBAR_AGENT_ITEMS: SidebarAgentItem[] = [
+  { name: "客户洞察", icon: agentCustomerInsightIcon },
+  { name: "风险管理", icon: agentRiskManagementIcon },
+  { name: "舆情监控", icon: agentPublicOpinionIcon },
+  { name: "商机挖掘", icon: agentOpportunityMiningIcon, disabled: true }
+];
+const AGENT_ICON_MAP: Record<SidebarAgentName, string> = SIDEBAR_AGENT_ITEMS.reduce(
+  (iconMap, item) => ({
+    ...iconMap,
+    [item.name]: item.icon
+  }),
+  {} as Record<SidebarAgentName, string>
+);
 
 const INITIAL_FILES: FileItem[] = [
   { name: "市场调研报告.doc", size: "10.3 KB", icon: getFileCoverIcon("市场调研报告.doc") },
@@ -248,11 +273,10 @@ const INITIAL_FILES: FileItem[] = [
 const ONE_DAY_IN_MS = 24 * 60 * 60 * 1000;
 const SIDEBAR_AUTO_COLLAPSE_BREAKPOINT = 1080;
 const FILES_PANEL_DEFAULT_WIDTH = 396;
-const FILES_PANEL_CONVERSATION_WIDTH = 510;
-const FILES_PANEL_MIN_WIDTH = 320;
-const FILES_PANEL_MAX_WIDTH = 640;
+const FILES_PANEL_DEFAULT_RATIO = 0.5;
+const FILES_PANEL_MIN_RATIO = 0.4;
+const FILES_PANEL_MAX_RATIO = 0.7;
 const FILES_PANEL_INSET = 8;
-const FILES_PANEL_MIN_MAIN_WIDTH = 360;
 const FILES_PANEL_RESIZE_STEP = 24;
 const FILE_CARD_MENU_WIDTH = 112;
 const CONCLUSION_STREAM_MIN_CHUNK_SIZE = 3;
@@ -872,6 +896,30 @@ function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
 
+function parseFileSize(size: string) {
+  const match = size.trim().match(/^([\d.]+)\s*(B|KB|MB|GB)$/i);
+  if (!match) return 0;
+
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return 0;
+
+  const unit = match[2].toUpperCase();
+  const multiplier = unit === "GB" ? 1024 ** 3 : unit === "MB" ? 1024 ** 2 : unit === "KB" ? 1024 : 1;
+  return value * multiplier;
+}
+
+function formatFileSummarySize(bytes: number) {
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function formatFilesPanelSummary(files: FileItem[]) {
+  const totalBytes = files.reduce((total, file) => total + parseFileSize(file.size), 0);
+  return `${files.length}个文件，${formatFileSummarySize(totalBytes)}`;
+}
+
 function getUploadSimulationDuration(bytes: number) {
   return clamp(1000 + Math.sqrt(bytes / 1024) * 35, 1100, 7000);
 }
@@ -1277,6 +1325,8 @@ function App() {
   const [isFilesPanelResizing, setIsFilesPanelResizing] = useState(false);
   const [isFilesSearchActive, setIsFilesSearchActive] = useState(false);
   const [filesSearchQuery, setFilesSearchQuery] = useState("");
+  const [filesPanelScope, setFilesPanelScope] = useState<FilesPanelScope>("all");
+  const [currentConversationFileNames, setCurrentConversationFileNames] = useState<string[]>([]);
   const [activeFileDetailName, setActiveFileDetailName] = useState<string | null>(null);
   const [inlineFileRename, setInlineFileRename] = useState<FileRenamePopoverState>(null);
   const [editingFileName, setEditingFileName] = useState<string | null>(null);
@@ -1358,11 +1408,14 @@ function App() {
   };
   const isSidebarCollapsed = collapsed || isAutoCollapsed;
   const visibleFiles = useMemo(() => {
+    const currentFileNames = new Set([...currentConversationFileNames, ...composerFiles.map((file) => file.name)]);
+    const scopedFiles = filesPanelScope === "current" ? files.filter((file) => currentFileNames.has(file.name)) : files;
     const query = filesSearchQuery.trim().toLowerCase();
-    if (!query) return files;
+    if (!query) return scopedFiles;
 
-    return files.filter((file) => file.name.toLowerCase().includes(query));
-  }, [files, filesSearchQuery]);
+    return scopedFiles.filter((file) => file.name.toLowerCase().includes(query));
+  }, [composerFiles, currentConversationFileNames, files, filesPanelScope, filesSearchQuery]);
+  const filesPanelSummary = useMemo(() => formatFilesPanelSummary(visibleFiles), [visibleFiles]);
   const activeFileDetail = useMemo(
     () => files.find((file) => file.name === activeFileDetailName) ?? null,
     [activeFileDetailName, files]
@@ -2025,6 +2078,7 @@ function App() {
     setRenamingHistory(null);
     setIsSourceDrawerOpen(false);
     setOpenCollapsedPopover(null);
+    setCurrentConversationFileNames([]);
   };
 
   const submitQuestion = (questionText: string) => {
@@ -2044,7 +2098,7 @@ function App() {
     setRenamingHistory(null);
     setIsSourceDrawerOpen(false);
     if (activeUtilityPanel === "files") {
-      setFilesPanelWidth((currentWidth) => Math.max(currentWidth, FILES_PANEL_CONVERSATION_WIDTH));
+      setFilesPanelWidth((currentWidth) => Math.max(currentWidth, getFilesPanelDefaultWidth()));
     }
     const now = new Date().toISOString();
 
@@ -2095,6 +2149,7 @@ function App() {
     const text = getComposerPlainText(draft, composerFiles).trim();
     if (!text && uploadComposerFiles.length === 0) return;
     const titleText = text || uploadComposerFiles.map((file) => file.name).join("、");
+    setCurrentConversationFileNames((current) => Array.from(new Set([...current, ...composerFiles.map((file) => file.name)])));
     submitQuestion(titleText);
 
     setDraft("");
@@ -2389,15 +2444,24 @@ function App() {
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
-  const getFilesPanelMaxWidth = () => {
+  const getFilesPanelAvailableWidth = () => {
     const mainLeft = mainRef.current?.getBoundingClientRect().left ?? 0;
-    const availableWidth = window.innerWidth - mainLeft - FILES_PANEL_INSET * 2;
-    return Math.max(FILES_PANEL_MIN_WIDTH, Math.min(FILES_PANEL_MAX_WIDTH, availableWidth - FILES_PANEL_MIN_MAIN_WIDTH));
+    return Math.max(0, window.innerWidth - mainLeft - FILES_PANEL_INSET * 2);
+  };
+
+  const getFilesPanelWidthByRatio = (ratio: number) => Math.round(getFilesPanelAvailableWidth() * ratio);
+
+  const getFilesPanelMinWidth = () => getFilesPanelWidthByRatio(FILES_PANEL_MIN_RATIO);
+
+  const getFilesPanelMaxWidth = () => getFilesPanelWidthByRatio(FILES_PANEL_MAX_RATIO);
+
+  const getFilesPanelDefaultWidth = () => {
+    return clamp(getFilesPanelWidthByRatio(FILES_PANEL_DEFAULT_RATIO), getFilesPanelMinWidth(), getFilesPanelMaxWidth());
   };
 
   const getFilesPanelWidthFromClientX = (clientX: number) => {
     const nextWidth = window.innerWidth - clientX - FILES_PANEL_INSET;
-    return clamp(nextWidth, FILES_PANEL_MIN_WIDTH, getFilesPanelMaxWidth());
+    return clamp(nextWidth, getFilesPanelMinWidth(), getFilesPanelMaxWidth());
   };
 
   const mainStyle = {
@@ -2440,8 +2504,9 @@ function App() {
     setSelectedFeedbackReasons([]);
     setFeedbackText("");
     if (activeUtilityPanel === "files") {
-      setFilesPanelWidth((currentWidth) => Math.max(currentWidth, FILES_PANEL_CONVERSATION_WIDTH));
+      setFilesPanelWidth((currentWidth) => Math.max(currentWidth, getFilesPanelDefaultWidth()));
     }
+    setCurrentConversationFileNames([]);
     setActiveHistoryId(session.id);
     setIsNewChatActive(false);
     setConversationRuns([{
@@ -2587,8 +2652,8 @@ function App() {
   };
 
   const toggleUtilityPanel = (panel: Exclude<UtilityPanel, null>) => {
-    if (panel === "files" && activeUtilityPanel !== "files" && hasConversation) {
-      setFilesPanelWidth((currentWidth) => Math.max(currentWidth, FILES_PANEL_CONVERSATION_WIDTH));
+    if (panel === "files" && activeUtilityPanel !== "files") {
+      setFilesPanelWidth(getFilesPanelDefaultWidth());
     }
     setActiveUtilityPanel((current) => (current === panel ? null : panel));
     setOpenHistoryMenu(null);
@@ -2688,41 +2753,48 @@ function App() {
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
-  const addFilesToFilesPanel = (uploadedFiles: File[]) => {
-    if (uploadedFiles.length === 0) return;
+  const addFilesToFilesPanel = (uploadedFiles: File[], options?: { markAsCurrentConversation?: boolean }) => {
+    if (uploadedFiles.length === 0) return [];
+
+    const existingNames = new Set(files.map((file) => file.name.toLowerCase()));
+    const appended = uploadedFiles.map((file) => {
+      const uniqueName = getUniqueFileName(file.name, existingNames);
+      existingNames.add(uniqueName.toLowerCase());
+      return {
+        name: uniqueName,
+        size: formatFileSize(file.size),
+        icon: getFileCoverIcon(uniqueName)
+      };
+    });
 
     setFiles((current) => {
-      const existingNames = new Set(current.map((file) => file.name.toLowerCase()));
-      const appended = uploadedFiles.map((file) => {
-        const uniqueName = getUniqueFileName(file.name, existingNames);
-        existingNames.add(uniqueName.toLowerCase());
-        return {
-          name: uniqueName,
-          size: formatFileSize(file.size),
-          icon: getFileCoverIcon(uniqueName)
-        };
-      });
-
       return [...appended, ...current];
     });
+
+    if (options?.markAsCurrentConversation) {
+      setCurrentConversationFileNames((current) => Array.from(new Set([...current, ...appended.map((file) => file.name)])));
+    }
+
+    return appended;
   };
 
   const onUploadFiles = (event: ReactChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = Array.from(event.target.files ?? []);
     const existingUploadNames = new Set(uploadComposerFiles.map((file) => file.name));
 
-    addFilesToFilesPanel(uploadedFiles);
+    const appendedFiles = addFilesToFilesPanel(uploadedFiles, { markAsCurrentConversation: true });
 
-    uploadedFiles.forEach((file) => {
-      if (existingUploadNames.has(file.name)) return;
-      existingUploadNames.add(file.name);
-      const id = `upload-${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    uploadedFiles.forEach((file, index) => {
+      const appendedFile = appendedFiles[index];
+      if (!appendedFile || existingUploadNames.has(appendedFile.name)) return;
+      existingUploadNames.add(appendedFile.name);
+      const id = `upload-${appendedFile.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       addComposerFile({
         id,
-        name: file.name,
-        icon: getUploadFileIcon(file.name),
-        size: formatFileSize(file.size),
+        name: appendedFile.name,
+        icon: getUploadFileIcon(appendedFile.name),
+        size: appendedFile.size,
         uploadProgress: 0,
         isUploading: true,
         source: "upload"
@@ -2739,7 +2811,7 @@ function App() {
     const uploadedFiles = Array.from(event.target.files ?? []);
     if (uploadedFiles.length === 0) return;
 
-    addFilesToFilesPanel(uploadedFiles);
+    addFilesToFilesPanel(uploadedFiles, { markAsCurrentConversation: true });
     event.target.value = "";
     setIsFilesSearchActive(false);
     setFilesSearchQuery("");
@@ -3281,6 +3353,7 @@ function App() {
   const deleteFile = (fileName: string) => {
     setFiles((current) => current.filter((file) => file.name !== fileName));
     setComposerFiles((current) => current.filter((file) => file.source !== "reference" || file.name !== fileName));
+    setCurrentConversationFileNames((current) => current.filter((name) => name !== fileName));
     setDraft((current) => removeComposerReferenceFromText(current, fileName));
     setOpenFileMenu(null);
     setOpenFileRenamePopover(null);
@@ -3347,6 +3420,9 @@ function App() {
             }
           : file
       )
+    );
+    setCurrentConversationFileNames((current) =>
+      current.map((fileName) => (fileName === previousName ? nextName : fileName))
     );
     setDraft((current) =>
       current.replace(
@@ -3500,12 +3576,12 @@ function App() {
   const onFilesPanelResizerKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      setFilesPanelWidth((current) => clamp(current + FILES_PANEL_RESIZE_STEP, FILES_PANEL_MIN_WIDTH, getFilesPanelMaxWidth()));
+      setFilesPanelWidth((current) => clamp(current + FILES_PANEL_RESIZE_STEP, getFilesPanelMinWidth(), getFilesPanelMaxWidth()));
     }
 
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      setFilesPanelWidth((current) => clamp(current - FILES_PANEL_RESIZE_STEP, FILES_PANEL_MIN_WIDTH, getFilesPanelMaxWidth()));
+      setFilesPanelWidth((current) => clamp(current - FILES_PANEL_RESIZE_STEP, getFilesPanelMinWidth(), getFilesPanelMaxWidth()));
     }
   };
 
@@ -3518,7 +3594,7 @@ function App() {
         role="separator"
         aria-label="调整我的文件面板宽度"
         aria-orientation="vertical"
-        aria-valuemin={FILES_PANEL_MIN_WIDTH}
+        aria-valuemin={getFilesPanelMinWidth()}
         aria-valuemax={getFilesPanelMaxWidth()}
         aria-valuenow={filesPanelWidth}
         tabIndex={0}
@@ -3732,7 +3808,24 @@ function App() {
         ) : (
           <>
             <div className="files-panel-toolbar">
-              <span>文件总数：{visibleFiles.length}</span>
+              <div className="files-panel-segment" role="tablist" aria-label="文件范围">
+                {[
+                  { key: "all", label: "全部文件" },
+                  { key: "current", label: "当前会话" }
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={filesPanelScope === item.key}
+                    className={filesPanelScope === item.key ? "files-panel-segment-item active" : "files-panel-segment-item"}
+                    onClick={() => setFilesPanelScope(item.key as FilesPanelScope)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <span className="files-panel-summary">{filesPanelSummary}</span>
               <div className="files-panel-toolbar-actions">
                 {isFilesSearchActive ? (
                   <label ref={filesSearchRef} className="files-panel-search" aria-label="搜索文件">
@@ -3942,23 +4035,32 @@ function App() {
     const content =
       openCollapsedPopover.type === "agent" ? (
         <div className="collapsed-popover-stack">
-          {AGENTS.map((item, index) => {
+          {SIDEBAR_AGENT_ITEMS.map((item, index) => {
             const selected = activeAgentIndex === index;
             return (
               <button
-                key={item}
+                key={item.name}
                 type="button"
-                className={selected ? "collapsed-popover-item selected" : "collapsed-popover-item"}
+                className={[
+                  "collapsed-popover-item",
+                  selected ? "selected" : "",
+                  item.disabled ? "disabled" : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                disabled={item.disabled}
+                aria-disabled={item.disabled ? true : undefined}
                 onClick={() => {
+                  if (item.disabled) return;
                   setActiveAgentIndex(index);
                   setOpenCollapsedPopover(null);
                   setCollapsedTooltip(null);
                 }}
               >
                 <span className="collapsed-popover-avatar" aria-hidden="true">
-                  <Icon name="huizhi" />
+                  <img src={item.icon} alt="" />
                 </span>
-                <span className="collapsed-popover-label">{item}</span>
+                <span className="collapsed-popover-label">{item.name}</span>
                 {selected ? <span className="collapsed-popover-dot" aria-hidden="true" /> : null}
               </button>
             );
@@ -4175,17 +4277,28 @@ function App() {
               <div className="sidebar-content">
                 <section className="side-group">
                   <div className="side-label">我的 Agent</div>
-                  {AGENTS.map((item, index) => (
+                  {SIDEBAR_AGENT_ITEMS.map((item, index) => (
                     <button
-                      key={item}
+                      key={item.name}
                       type="button"
-                      className={`agent-item ${activeAgentIndex === index ? "selected" : ""}`}
-                      onClick={() => setActiveAgentIndex(index)}
+                      className={[
+                        "agent-item",
+                        activeAgentIndex === index ? "selected" : "",
+                        item.disabled ? "disabled" : ""
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      disabled={item.disabled}
+                      aria-disabled={item.disabled ? true : undefined}
+                      onClick={() => {
+                        if (item.disabled) return;
+                        setActiveAgentIndex(index);
+                      }}
                     >
                       <span className="avatar">
-                        <Icon name="huizhi" />
+                        <img src={item.icon} alt="" />
                       </span>
-                      <span>{item}</span>
+                      <span>{item.name}</span>
                     </button>
                   ))}
                 </section>
@@ -4231,7 +4344,7 @@ function App() {
                   onClick={(event) => toggleCollapsedPopover("agent", event)}
                 >
                   <span className="tiny-avatar">
-                    <Icon name="huizhi" />
+                    <img src={AGENT_ICON_MAP[activeAgent]} alt="" />
                   </span>
                 </button>
                 {collapsedNavItems.map(({ icon, label }) => (

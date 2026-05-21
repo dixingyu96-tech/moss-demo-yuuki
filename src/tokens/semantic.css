@@ -1,17 +1,17 @@
 :root {
   /* Brand */
-  --colorPrimary: #0B0B0B;
-  --colorPrimaryActive: #0B0B0B;
-  --colorPrimaryHover: #383835;
-  --colorPrimaryBg: rgba(11, 11, 11, 0.05);
-  --colorPrimaryBgActive: rgba(11, 11, 11, 0.2);
-  --colorPrimaryBgHover: rgba(11, 11, 11, 0.1);
+  --colorPrimary: var(--color-neutral-light-12);
+  --colorPrimaryActive: var(--color-neutral-light-12);
+  --colorPrimaryHover: var(--color-neutral-light-10);
+  --colorPrimaryBg: var(--color-black-alpha-light-12);
+  --colorPrimaryBgActive: var(--color-black-alpha-light-10);
+  --colorPrimaryBgHover: var(--color-black-alpha-light-11);
   --colorPrimaryBorder: var(--color-brand-light-3);
   --colorPrimaryBorderHover: var(--color-brand-light-4);
   --colorPrimaryText: var(--color-brand-light-6);
   --colorPrimaryTextActive: var(--color-brand-light-7);
   --colorPrimaryTextHover: var(--color-brand-light-5);
-  --colorControlOutline: rgba(11, 11, 11, 0.15);
+  --colorControlOutline: color-mix(in srgb, var(--color-neutral-light-12) 15%, transparent);
 
   /* Success */
   --colorSuccess: var(--color-green-light-6);
@@ -36,7 +36,7 @@
   --colorWarningText: var(--color-yellow-light-6);
   --colorWarningTextActive: var(--color-yellow-light-7);
   --colorWarningTextHover: var(--color-yellow-light-5);
-  --colorControlWarningOutline: rgba(245, 169, 39, 0.1);
+  --colorControlWarningOutline: color-mix(in srgb, var(--colorWarning) 10%, transparent);
 
   /* Error */
   --colorError: var(--color-red-light-6);
@@ -50,7 +50,7 @@
   --colorErrorText: var(--color-red-light-6);
   --colorErrorTextActive: var(--color-red-light-7);
   --colorErrorTextHover: var(--color-red-light-5);
-  --colorControlErrorOutline: rgba(239, 86, 85, 0.12);
+  --colorControlErrorOutline: color-mix(in srgb, var(--colorError) 12%, transparent);
 
   /* Info */
   --colorInfo: var(--color-blue-light-6);
@@ -67,7 +67,7 @@
   /* Neutral */
   --colorZero: var(--color-black-alpha-light-13);
   --colorWhite: var(--color-neutral-light-0);
-  --colorWhiteFixation: #FFFFFF;
+  --colorWhiteFixation: var(--color-white-alpha-light-1);
   --colorBlack: var(--color-neutral-light-12);
   --colorText: var(--color-black-alpha-light-1);
   --colorTextSecondary: var(--color-black-alpha-light-3);
@@ -86,10 +86,10 @@
   --colorIconActive: var(--colorText);
   --colorIconNormal: var(--colorTextSecondary);
   --colorIconDisabled: var(--color-black-alpha-light-9);
-  --colorBorderPrimary: rgba(11, 11, 11, 0.4);
-  --colorBorder: rgba(11, 11, 11, 0.3);
-  --colorBorderSecondary: rgba(11, 11, 11, 0.2);
-  --colorBorderTertiary: rgba(11, 11, 11, 0.1);
+  --colorBorderPrimary: var(--color-black-alpha-light-7);
+  --colorBorder: var(--color-black-alpha-light-9);
+  --colorBorderSecondary: var(--color-black-alpha-light-10);
+  --colorBorderTertiary: var(--color-black-alpha-light-11);
   --colorSplit: var(--colorBorderSecondary);
   --colorSplitWhite: var(--color-white-alpha-light-3);
   --colorFill: var(--color-black-alpha-light-8);
@@ -114,8 +114,8 @@
   --colorFillContent: var(--colorFillSecondary);
   --colorBgTextNormalHover: var(--colorFillQuaternary);
   --colorBgTextNormalActive: var(--colorFillTertiary);
-  --colorBgTextHover: rgba(11, 11, 11, 0.05);
-  --colorBgTextActive: rgba(11, 11, 11, 0.1);
+  --colorBgTextHover: var(--colorFillQuaternary);
+  --colorBgTextActive: var(--colorFillTertiary);
   --colorBgTextErrorHover: var(--color-red-light-1);
   --colorBgTextErrorActive: var(--color-red-light-2);
   --controlItemBgActive: var(--colorPrimaryBg);
@@ -156,7 +156,7 @@
   --border-brand-soft: var(--colorPrimaryBorder);
 
   --shadow-line: var(--colorBgShape);
-  --shadow-soft: rgba(11, 11, 11, 0.06);
+  --shadow-soft: var(--color-shadow-alpha-4);
 
   --dot-base: color-mix(in srgb, var(--color-neutral-light-4) 86%, transparent);
   --dot-active: color-mix(in srgb, var(--color-neutral-light-7) 52%, transparent);

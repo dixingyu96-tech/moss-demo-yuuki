@@ -202,8 +202,8 @@
   --moss-composer-upload-text-hover: var(--colorIconActive);
   --moss-composer-upload-tooltip-bg: var(--colorBgSpotlight);
   --moss-composer-upload-tooltip-text: var(--colorWhite);
-  --moss-composer-file-tag-bg: var(--color-shadow-alpha-2);
-  --moss-composer-file-tag-bg-hover: rgba(11, 11, 11, 0.12);
+  --moss-composer-file-tag-bg: var(--colorFillQuaternary);
+  --moss-composer-file-tag-bg-hover: var(--colorFillTertiary);
   --moss-composer-file-tag-progress-fill: var(--colorFillQuaternary);
   --moss-composer-file-tag-text: var(--colorTextSecondary);
   --moss-composer-file-tag-size-text: var(--colorTextPlaceholder);
