@@ -4061,7 +4061,6 @@ function App() {
                   <img src={item.icon} alt="" />
                 </span>
                 <span className="collapsed-popover-label">{item.name}</span>
-                {selected ? <span className="collapsed-popover-dot" aria-hidden="true" /> : null}
               </button>
             );
           })}

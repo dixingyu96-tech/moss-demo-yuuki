@@ -862,14 +862,6 @@ textarea {
   text-overflow: ellipsis;
 }
 
-.collapsed-popover-dot {
-  width: var(--moss-sidebar-collapsed-dot-size);
-  height: var(--moss-sidebar-collapsed-dot-size);
-  border-radius: 50%;
-  background: var(--brand-primary);
-  flex: 0 0 auto;
-}
-
 .collapsed-history-group {
   display: flex;
   flex-direction: column;
