@@ -6,6 +6,20 @@
   "description": "",
   "glyphs": [
     {
+      "icon_id": "47623333",
+      "name": "共享",
+      "font_class": "gongxiang",
+      "unicode": "e7e5",
+      "unicode_decimal": 59365
+    },
+    {
+      "icon_id": "47623334",
+      "name": "toast提示_询问_面",
+      "font_class": "toasttishi_xunwen_mian",
+      "unicode": "e7e6",
+      "unicode_decimal": 59366
+    },
+    {
       "icon_id": "47603394",
       "name": "取消引用",
       "font_class": "quxiaoyinyong",

@@ -41,6 +41,7 @@ import agentRiskManagementIcon from "./assets/风险管理.png";
 import resolutionPartialSelectedIcon from "./assets/满意度_部分解决_选中.png";
 import resolutionResolvedSelectedIcon from "./assets/满意度_已解决_选中.png";
 import resolutionUnresolvedSelectedIcon from "./assets/满意度_未解决_选中.png";
+import sharedFileTagIcon from "./assets/共享文件tag.png";
 import myFilesColorIcon from "./assets/my-files-color.png";
 import source21stIcon from "./assets/source-21st.png";
 import sourceBaiduIcon from "./assets/source-baidu.png";
@@ -116,8 +117,10 @@ type FileItem = {
   name: string;
   size: string;
   icon: string;
+  isShared?: boolean;
 };
 type FilesPanelScope = "all" | "current";
+type ShareConfirmIntent = "share" | "shareAndQuote";
 type ConversationRun = {
   id: string;
   question: string;
@@ -1344,6 +1347,10 @@ function App() {
   const [feedbackText, setFeedbackText] = useState("");
   const [openFileMenu, setOpenFileMenu] = useState<FileMenuState>(null);
   const [openFileRenamePopover, setOpenFileRenamePopover] = useState<FileRenamePopoverState>(null);
+  const [shareConfirmFileName, setShareConfirmFileName] = useState<string | null>(null);
+  const [shareConfirmIntent, setShareConfirmIntent] = useState<ShareConfirmIntent>("share");
+  const [pendingShareQuoteMentionRange, setPendingShareQuoteMentionRange] = useState<NonNullable<FileMentionRange> | null>(null);
+  const [deleteConfirmFileName, setDeleteConfirmFileName] = useState<string | null>(null);
   const [uploadTooltip, setUploadTooltip] = useState<FloatingPointState>(null);
   const [globalToast, setGlobalToast] = useState<GlobalToastState>(null);
   const mainRef = useRef<HTMLElement | null>(null);
@@ -1353,6 +1360,7 @@ function App() {
   const historyMenuRef = useRef<HTMLDivElement | null>(null);
   const historyRenameInputRef = useRef<HTMLInputElement | null>(null);
   const shouldSkipHistoryRenameBlurRef = useRef(false);
+  const shouldSkipFileRenameBlurRef = useRef(false);
   const fileMenuRef = useRef<HTMLDivElement | null>(null);
   const fileRenamePopoverRef = useRef<HTMLFormElement | null>(null);
   const fileRenameInputRef = useRef<HTMLInputElement | null>(null);
@@ -1408,13 +1416,13 @@ function App() {
   };
   const isSidebarCollapsed = collapsed || isAutoCollapsed;
   const visibleFiles = useMemo(() => {
-    const currentFileNames = new Set([...currentConversationFileNames, ...composerFiles.map((file) => file.name)]);
-    const scopedFiles = filesPanelScope === "current" ? files.filter((file) => currentFileNames.has(file.name)) : files;
+    const scopedFiles = filesPanelScope === "current" ? files.filter((file) => file.isShared) : files;
     const query = filesSearchQuery.trim().toLowerCase();
     if (!query) return scopedFiles;
 
     return scopedFiles.filter((file) => file.name.toLowerCase().includes(query));
-  }, [composerFiles, currentConversationFileNames, files, filesPanelScope, filesSearchQuery]);
+  }, [files, filesPanelScope, filesSearchQuery]);
+  const isCurrentFilesPanelEmpty = filesPanelScope === "current" && visibleFiles.length === 0;
   const filesPanelSummary = useMemo(() => formatFilesPanelSummary(visibleFiles), [visibleFiles]);
   const activeFileDetail = useMemo(
     () => files.find((file) => file.name === activeFileDetailName) ?? null,
@@ -1833,11 +1841,16 @@ function App() {
     if (!openFileRenamePopover) return;
 
     const focusFrame = window.requestAnimationFrame(() => {
-      fileRenameInputRef.current?.focus();
-      fileRenameInputRef.current?.select();
+      const input = fileRenameInputRef.current;
+      if (!input) return;
+
+      input.focus();
+      const cursor = input.value.length;
+      input.setSelectionRange(cursor, cursor);
     });
 
     const closePopover = () => {
+      shouldSkipFileRenameBlurRef.current = true;
       setOpenFileRenamePopover(null);
     };
 
@@ -1862,6 +1875,36 @@ function App() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [openFileRenamePopover]);
+
+  useEffect(() => {
+    if (!shareConfirmFileName) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setShareConfirmFileName(null);
+      setShareConfirmIntent("share");
+      setPendingShareQuoteMentionRange(null);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [shareConfirmFileName]);
+
+  useEffect(() => {
+    if (!deleteConfirmFileName) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setDeleteConfirmFileName(null);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [deleteConfirmFileName]);
 
   useEffect(() => {
     if (!activeHistoryId) return;
@@ -2964,6 +3007,90 @@ function App() {
     );
   };
 
+  const renderShareFileConfirm = () => {
+    if (!shareConfirmFileName) return null;
+
+    const isShareAndQuote = shareConfirmIntent === "shareAndQuote";
+
+    return createPortal(
+      <div className="share-file-alert-backdrop" role="presentation">
+        <section
+          className="share-file-alert"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="share-file-alert-title"
+          aria-describedby="share-file-alert-description"
+        >
+          <span className="share-file-alert-icon" aria-hidden="true">
+            <Icon name="toasttishi_xunwen_mian" />
+          </span>
+          <div className="share-file-alert-content">
+            <h3 id="share-file-alert-title">{isShareAndQuote ? "确定共享并引用文件吗？" : "确定共享文件吗？"}</h3>
+            <p id="share-file-alert-description">
+              {isShareAndQuote
+                ? "该文件尚未共享，共享后即可引用到当前会话。共享后，所有会话均可引用此文件。"
+                : "共享文件后，所有会话均可引用此文件。该操作不支持撤销。"}
+            </p>
+            <div className="share-file-alert-footer">
+              <button
+                type="button"
+                className="share-file-alert-button secondary"
+                onClick={() => {
+                  setShareConfirmFileName(null);
+                  setShareConfirmIntent("share");
+                  setPendingShareQuoteMentionRange(null);
+                }}
+              >
+                取消
+              </button>
+              <button type="button" className="share-file-alert-button primary" onClick={confirmShareFile}>
+                {isShareAndQuote ? "共享并引用" : "共享"}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>,
+      document.body
+    );
+  };
+
+  const renderDeleteFileConfirm = () => {
+    if (!deleteConfirmFileName) return null;
+
+    const isSharedFile = Boolean(files.find((file) => file.name === deleteConfirmFileName)?.isShared);
+
+    return createPortal(
+      <div className="share-file-alert-backdrop" role="presentation">
+        <section
+          className="share-file-alert"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-file-alert-title"
+          aria-describedby="delete-file-alert-description"
+        >
+          <span className="share-file-alert-icon is-warning" aria-hidden="true">
+            <Icon name="toasttishi_jinggao_mian" />
+          </span>
+          <div className="share-file-alert-content">
+            <h3 id="delete-file-alert-title">{isSharedFile ? "确定删除共享文件吗？" : "确定删除文件吗？"}</h3>
+            <p id="delete-file-alert-description">
+              {isSharedFile ? "删除后，所有会话将无法引用此文件。该操作不支持撤销。" : "删除后无法找回，请谨慎操作。"}
+            </p>
+            <div className="share-file-alert-footer">
+              <button type="button" className="share-file-alert-button secondary" onClick={() => setDeleteConfirmFileName(null)}>
+                取消
+              </button>
+              <button type="button" className="share-file-alert-button danger" onClick={confirmDeleteFile}>
+                删除
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>,
+      document.body
+    );
+  };
+
   const renderResolutionPopconfirm = () => {
     if (isResolutionThanksVisible || !pendingResolutionFeedback || !resolutionPopconfirmPosition) return null;
 
@@ -3017,6 +3144,15 @@ function App() {
     );
   };
 
+  const isCurrentConversationFile = (fileName: string) => currentConversationFileNames.includes(fileName);
+
+  const canQuoteFileDirectly = (fileName: string) => {
+    const targetFile = files.find((file) => file.name === fileName);
+    if (!targetFile) return false;
+
+    return isCurrentConversationFile(fileName) || Boolean(targetFile.isShared);
+  };
+
   const quoteFileToComposer = (fileName: string) => {
     if (referenceComposerFiles.some((item) => item.name === fileName)) {
       window.requestAnimationFrame(() => textareaRef.current?.focus());
@@ -3043,6 +3179,49 @@ function App() {
       textareaRef.current?.focus();
       textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
     });
+  };
+
+  const insertMentionFileReference = (fileName: string, mentionRange: FileMentionRange = fileMentionRange) => {
+    if (!mentionRange) return;
+
+    const referenceId = `reference-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    addComposerFile({
+      id: referenceId,
+      name: fileName,
+      icon: getUploadFileIcon(fileName),
+      source: "reference"
+    });
+    const marker = `${COMPOSER_REFERENCE_START}${fileName}${COMPOSER_REFERENCE_END}`;
+    const nextCursor = mentionRange.start + marker.length;
+    setDraft((current) => `${current.slice(0, mentionRange.start)}${marker}${current.slice(mentionRange.end)}`);
+    setFileMentionRange(null);
+    setPendingShareQuoteMentionRange(null);
+
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const openShareQuoteConfirm = (fileName: string, options?: { useMentionRange?: boolean }) => {
+    setOpenFileMenu(null);
+    setShareConfirmFileName(fileName);
+    setShareConfirmIntent("shareAndQuote");
+    setPendingShareQuoteMentionRange(options?.useMentionRange && fileMentionRange ? { ...fileMentionRange } : null);
+  };
+
+  const requestQuoteFile = (fileName: string, options?: { useMentionRange?: boolean }) => {
+    if (canQuoteFileDirectly(fileName)) {
+      if (options?.useMentionRange) {
+        insertMentionFileReference(fileName);
+        return;
+      }
+
+      quoteFileToComposer(fileName);
+      return;
+    }
+
+    openShareQuoteConfirm(fileName, options);
   };
 
   const handleComposerChange = (event: ReactChangeEvent<HTMLTextAreaElement>) => {
@@ -3099,22 +3278,7 @@ function App() {
   const selectMentionFile = (fileName: string) => {
     if (!fileMentionRange) return;
 
-    const referenceId = `reference-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    addComposerFile({
-      id: referenceId,
-      name: fileName,
-      icon: getUploadFileIcon(fileName),
-      source: "reference"
-    });
-    const marker = `${COMPOSER_REFERENCE_START}${fileName}${COMPOSER_REFERENCE_END}`;
-    const nextCursor = fileMentionRange.start + marker.length;
-    setDraft((current) => `${current.slice(0, fileMentionRange.start)}${marker}${current.slice(fileMentionRange.end)}`);
-    setFileMentionRange(null);
-
-    window.requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-      textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
-    });
+    requestQuoteFile(fileName, { useMentionRange: true });
   };
 
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -3336,6 +3500,7 @@ function App() {
   const openRenamePopoverAt = (fileName: string, left: number, top: number) => {
     const { baseName } = splitFileNameExtension(fileName);
     const position = getRenamePopoverPosition(left, top);
+    shouldSkipFileRenameBlurRef.current = false;
     setOpenFileMenu(null);
     setOpenFileRenamePopover({
       fileName,
@@ -3384,6 +3549,51 @@ function App() {
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     setOpenFileMenu(null);
+  };
+
+  const openShareFileConfirm = (fileName: string) => {
+    setOpenFileMenu(null);
+    setShareConfirmFileName(fileName);
+    setShareConfirmIntent("share");
+    setPendingShareQuoteMentionRange(null);
+  };
+
+  const openDeleteFileConfirm = (fileName: string) => {
+    setOpenFileMenu(null);
+    setDeleteConfirmFileName(fileName);
+  };
+
+  const confirmDeleteFile = () => {
+    if (!deleteConfirmFileName) return;
+
+    deleteFile(deleteConfirmFileName);
+    setDeleteConfirmFileName(null);
+  };
+
+  const requestDeleteFile = (fileName: string) => {
+    openDeleteFileConfirm(fileName);
+  };
+
+  const confirmShareFile = () => {
+    if (!shareConfirmFileName) return;
+
+    const fileName = shareConfirmFileName;
+    const shouldQuoteAfterShare = shareConfirmIntent === "shareAndQuote";
+    const savedMentionRange = pendingShareQuoteMentionRange;
+
+    setFiles((current) => current.map((file) => (file.name === fileName ? { ...file, isShared: true } : file)));
+    setShareConfirmFileName(null);
+    setShareConfirmIntent("share");
+    setPendingShareQuoteMentionRange(null);
+
+    if (!shouldQuoteAfterShare) return;
+
+    if (savedMentionRange) {
+      insertMentionFileReference(fileName, savedMentionRange);
+      return;
+    }
+
+    quoteFileToComposer(fileName);
   };
 
   const markFileEditing = (fileName: string) => {
@@ -3443,12 +3653,28 @@ function App() {
     return nextName;
   };
 
-  const confirmFileRename = (event: ReactFormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const cancelFileRename = () => {
+    shouldSkipFileRenameBlurRef.current = true;
+    setOpenFileRenamePopover(null);
+  };
+
+  const commitFileRename = () => {
     if (!openFileRenamePopover) return;
 
-    applyFileRename(openFileRenamePopover.fileName, openFileRenamePopover.value);
+    shouldSkipFileRenameBlurRef.current = false;
+    const { fileName, value } = openFileRenamePopover;
+    const { baseName: currentBaseName } = splitFileNameExtension(fileName);
+    const nextBaseName = normalizeRenameBaseName(value, currentBaseName);
     setOpenFileRenamePopover(null);
+
+    if (nextBaseName === currentBaseName) return;
+
+    applyFileRename(fileName, value);
+  };
+
+  const confirmFileRename = (event: ReactFormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    commitFileRename();
   };
 
   const startInlineFileRename = (fileName: string) => {
@@ -3494,6 +3720,7 @@ function App() {
         <input
           ref={fileRenameInputRef}
           className="file-rename-input"
+          aria-label="重命名文件"
           value={openFileRenamePopover.value}
           onChange={(event) =>
             setOpenFileRenamePopover((current) =>
@@ -3505,12 +3732,30 @@ function App() {
                 : current
             )
           }
+          onBlur={() => {
+            if (shouldSkipFileRenameBlurRef.current) {
+              shouldSkipFileRenameBlurRef.current = false;
+              return;
+            }
+
+            commitFileRename();
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            cancelFileRename();
+          }}
         />
         <div className="file-rename-actions">
-          <button type="button" className="file-rename-button secondary" onClick={() => setOpenFileRenamePopover(null)}>
+          <button
+            type="button"
+            className="file-rename-button secondary"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={cancelFileRename}
+          >
             取消
           </button>
-          <button type="submit" className="file-rename-button primary">
+          <button type="submit" className="file-rename-button primary" onMouseDown={(event) => event.preventDefault()}>
             确定
           </button>
         </div>
@@ -3521,6 +3766,9 @@ function App() {
 
   const renderFileMenu = () => {
     if (!openFileMenu) return null;
+
+    const menuFile = files.find((file) => file.name === openFileMenu.fileName);
+    const isMenuFileShared = Boolean(menuFile?.isShared);
 
     return createPortal(
       <div
@@ -3537,6 +3785,14 @@ function App() {
             <span>编辑</span>
           </button>
         ) : null}
+        {isMenuFileShared ? null : (
+          <button type="button" className="file-card-menu-option" role="menuitem" onClick={() => openShareFileConfirm(openFileMenu.fileName)}>
+            <span className="file-card-menu-icon" aria-hidden="true">
+              <Icon name="gongxiang" />
+            </span>
+            <span>共享</span>
+          </button>
+        )}
         <button type="button" className="file-card-menu-option" role="menuitem" onClick={() => downloadFile(openFileMenu.fileName)}>
           <span className="file-card-menu-icon" aria-hidden="true">
             <Icon name="xiazai" />
@@ -3554,7 +3810,7 @@ function App() {
           </span>
           <span>重命名</span>
         </button>
-        <button type="button" className="file-card-menu-option danger" role="menuitem" onClick={() => deleteFile(openFileMenu.fileName)}>
+        <button type="button" className="file-card-menu-option danger" role="menuitem" onClick={() => requestDeleteFile(openFileMenu.fileName)}>
           <span className="file-card-menu-icon" aria-hidden="true">
             <Icon name="shanchu" />
           </span>
@@ -3741,7 +3997,7 @@ function App() {
                     type="button"
                     className="icon-btn files-detail-icon-action"
                     aria-label="删除"
-                    onClick={() => deleteFile(activeFileDetail.name)}
+                    onClick={() => requestDeleteFile(activeFileDetail.name)}
                   >
                     <Icon name="shanchu" />
                   </button>
@@ -3764,7 +4020,7 @@ function App() {
                         return;
                       }
 
-                      quoteFileToComposer(activeFileDetail.name);
+                      requestQuoteFile(activeFileDetail.name);
                     }}
                   >
                     <Icon name={isActiveFileReferenced ? "quxiaoyinyong" : "yinyongdaohuihua"} />
@@ -3825,7 +4081,9 @@ function App() {
                   </button>
                 ))}
               </div>
-              <span className="files-panel-summary">{filesPanelSummary}</span>
+              <span className={isCurrentFilesPanelEmpty ? "files-panel-summary is-hidden" : "files-panel-summary"}>
+                {filesPanelSummary}
+              </span>
               <div className="files-panel-toolbar-actions">
                 {isFilesSearchActive ? (
                   <label ref={filesSearchRef} className="files-panel-search" aria-label="搜索文件">
@@ -3878,8 +4136,9 @@ function App() {
                 />
               </div>
             </div>
-            <div className="files-grid">
-              {visibleFiles.map((file) => {
+            <div className={isCurrentFilesPanelEmpty ? "files-grid is-empty" : "files-grid"}>
+              {isCurrentFilesPanelEmpty ? <p className="files-empty-state">当前会话暂无文件</p> : null}
+              {isCurrentFilesPanelEmpty ? null : visibleFiles.map((file) => {
                 const isFileReferenced = referenceComposerFiles.some((item) => item.name === file.name);
                 const quoteActionLabel = isFileReferenced ? "取消引用" : "引用文件";
 
@@ -3908,6 +4167,7 @@ function App() {
                       setFilesSearchQuery("");
                     }}
                   >
+                    {file.isShared ? <img className="file-card-shared-tag" src={sharedFileTagIcon} alt="共享文件" /> : null}
                     <span className="file-card-preview">
                       <img src={file.icon} alt="" />
                     </span>
@@ -3926,7 +4186,7 @@ function App() {
                                 removeComposerReferenceByName(file.name);
                                 return;
                               }
-                              quoteFileToComposer(file.name);
+                              requestQuoteFile(file.name);
                             }}
                           >
                             <Icon name={isFileReferenced ? "quxiaoyinyong" : "yinyongdaohuihua"} />
@@ -4570,7 +4830,7 @@ function App() {
                             <div className="chat-answer-row">
                               <div className="chat-answer-meta">
                                 <span className="avatar">
-                                  <Icon name="huizhi" />
+                                  <img src={AGENT_ICON_MAP[activeAgent]} alt="" />
                                 </span>
                                 <span>{activeAgent}</span>
                                 <span className="chat-time">刚刚</span>
@@ -4946,6 +5206,8 @@ function App() {
       {renderUploadTooltip()}
       {renderFileMenu()}
       {renderFileRenamePopover()}
+      {renderShareFileConfirm()}
+      {renderDeleteFileConfirm()}
       {renderFeedbackDialog()}
       {renderGlobalToast()}
       {renderResolutionPopconfirm()}
