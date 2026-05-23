@@ -47,6 +47,8 @@ import source21stIcon from "./assets/source-21st.png";
 import sourceBaiduIcon from "./assets/source-baidu.png";
 import sourceBingIcon from "./assets/source-bing.png";
 import sourceHuabanIcon from "./assets/source-huaban.png";
+import caseCenterBanner from "./assets/case-center-banner.png";
+import caseCenterCollapsedIcon from "./assets/case-center-collapsed.png";
 import userAvatar from "./assets/user-avatar.jpg";
 
 type TabKey = "portrait" | "company" | "finance" | "news" | "people" | "market";
@@ -61,7 +63,9 @@ type HistorySession = {
   createdAt: string;
   updatedAt: string;
   isFavorite: boolean;
+  hasUnread?: boolean;
 };
+type SessionConversationRunsMap = Record<string, ConversationRun[]>;
 type HistoryGroups = Record<HistoryGroupKey, HistorySession[]>;
 type HistoryMenuState = {
   sessionId: string;
@@ -124,6 +128,7 @@ type ShareConfirmIntent = "share" | "shareAndQuote";
 type ConversationRun = {
   id: string;
   question: string;
+  agentKey: AgentKey;
   createdAt: string;
   completedAt?: string;
   conclusionMarkdown: string;
@@ -247,14 +252,24 @@ type SidebarAgentItem = {
   name: SidebarAgentName;
   icon: string;
   disabled?: boolean;
+  hidden?: boolean;
 };
 
 const SIDEBAR_AGENT_ITEMS: SidebarAgentItem[] = [
   { name: "客户洞察", icon: agentCustomerInsightIcon },
   { name: "风险管理", icon: agentRiskManagementIcon },
   { name: "舆情监控", icon: agentPublicOpinionIcon },
-  { name: "商机挖掘", icon: agentOpportunityMiningIcon, disabled: true }
+  { name: "商机挖掘", icon: agentOpportunityMiningIcon, disabled: true, hidden: true }
 ];
+function getSidebarAgentIndex(item: SidebarAgentItem): number | null {
+  if (!(AGENTS as readonly string[]).includes(item.name)) return null;
+  return AGENTS.indexOf(item.name as AgentKey);
+}
+
+function isVisibleSidebarAgent(item: SidebarAgentItem): boolean {
+  return !item.hidden;
+}
+
 const AGENT_ICON_MAP: Record<SidebarAgentName, string> = SIDEBAR_AGENT_ITEMS.reduce(
   (iconMap, item) => ({
     ...iconMap,
@@ -285,14 +300,36 @@ const FILE_CARD_MENU_WIDTH = 112;
 const CONCLUSION_STREAM_MIN_CHUNK_SIZE = 3;
 const CONCLUSION_STREAM_MAX_CHUNK_SIZE = 9;
 const CHAT_BOTTOM_THRESHOLD = 24;
-const DEFAULT_THINKING_CHAIN_STEPS = [
-  "阅读 \"skills/customer-insight/SKILL.md\"",
-  "解析问题意图：客户洞察",
-  "MOSS-企业画像库：帆软软件",
-  "MOSS-AI搜索：帆软软件",
-  "搜索网络：帆软软件",
-  "交叉验证公开来源",
-  "生成销售拓客速读"
+type ThinkingChainToolItem = {
+  type: "tool";
+  label: string;
+  failed?: boolean;
+};
+
+type ThinkingChainNarrativeItem = {
+  type: "narrative";
+  text: string;
+};
+
+type ThinkingChainItem = ThinkingChainToolItem | ThinkingChainNarrativeItem;
+
+type ThinkingToolGroup = {
+  narrative: string;
+  tools: Array<{ label: string; failed?: boolean }>;
+};
+
+const DEFAULT_THINKING_CHAIN_ITEMS: ThinkingChainItem[] = [
+  { type: "narrative", text: "我将完整展示本次思考过程。我会先阅读相关技能，再开始工作。" },
+  { type: "tool", label: '阅读 "skills/customer-insight/SKILL.md"' },
+  { type: "tool", label: "解析问题意图：客户洞察" },
+  { type: "narrative", text: "我准备检索企业画像与内部资料，交叉验证后可读结论。" },
+  { type: "tool", label: "MOSS-企业画像库：帆软软件" },
+  { type: "tool", label: "MOSS-AI搜索：帆软软件" },
+  { type: "narrative", text: "接下来补充网络侧信息，完成交叉验证。" },
+  { type: "tool", label: "搜索网络：帆软软件" },
+  { type: "tool", label: "交叉验证公开来源" },
+  { type: "narrative", text: "整理证据链后，生成面向销售的拓客速读。" },
+  { type: "tool", label: "生成销售拓客速读" }
 ];
 const DEFAULT_FOLLOW_UP_QUESTIONS = [
   "继续拆解关键部门与负责人，生成下一步拜访清单",
@@ -410,86 +447,241 @@ function inferThinkingTopic(question: string) {
   return "销售拓客洞察";
 }
 
-function buildThinkingChainSteps(agent: AgentKey, question: string) {
-  if (!buildSessionTitle(question)) return DEFAULT_THINKING_CHAIN_STEPS;
+function getThinkingToolGroupsForTopic(
+  companyName: string,
+  topic: string,
+  shouldInjectFailure: boolean
+): ThinkingToolGroup[] {
+  const drawBriefLabel = (name: string) => `绘制 "${name}分析简报"`;
+
+  const groupsByTopic: Record<string, ThinkingToolGroup[]> = {
+    财务与经营表现: [
+      {
+        narrative: `我在查询${companyName}的财务与经营表现，先检索内部经营与指标库。`,
+        tools: [
+          { label: `MOSS-企业经营库：${companyName}` },
+          { label: `MOSS-财务指标检索：${companyName}` }
+        ]
+      },
+      {
+        narrative: `我将整理收入口径与可信度说明，并生成可读简报。`,
+        tools: [
+          { label: drawBriefLabel(`${companyName}财务表现`), failed: shouldInjectFailure },
+          { label: "交叉核验年报、新闻与公开披露" },
+          { label: "提炼收入口径与可信度说明" }
+        ]
+      },
+      {
+        narrative: `接下来补充网络侧披露与新闻，完成交叉验证。`,
+        tools: [{ label: `搜索网络：${companyName} 销售额 营收` }]
+      }
+    ],
+    客户行业分布: [
+      {
+        narrative: `我在梳理${companyName}的客户行业分布，先检索内部案例与样本库。`,
+        tools: [
+          { label: `MOSS-客户案例库：${companyName}` },
+          { label: `MOSS-行业样本聚类：${companyName}` }
+        ]
+      },
+      {
+        narrative: `我将归并行业标签与典型场景，并输出销售切入优先级。`,
+        tools: [
+          { label: drawBriefLabel(`${companyName}行业分布`), failed: shouldInjectFailure },
+          { label: "归并客户行业标签与典型场景" },
+          { label: "生成销售切入优先级" }
+        ]
+      },
+      {
+        narrative: `接下来补充网络侧客户与行业信息。`,
+        tools: [{ label: `搜索网络：${companyName} 客户 行业 分布` }]
+      }
+    ],
+    竞争格局: [
+      {
+        narrative: `我在梳理${companyName}的竞争格局，接下来检索内部竞品图谱与 AI 搜索。`,
+        tools: [
+          { label: `MOSS-竞品图谱：${companyName}` },
+          { label: `MOSS-AI搜索：${companyName} 竞争对手` }
+        ]
+      },
+      {
+        narrative: `我将对比产品能力、客群与价格带，并生成竞争应对要点。`,
+        tools: [
+          { label: drawBriefLabel(`${companyName}竞争格局`), failed: shouldInjectFailure },
+          { label: `绘制 "${companyName}竞争应对要点"` },
+          { label: "对比产品能力、客群与价格带" },
+          { label: "输出竞争应对要点" }
+        ]
+      },
+      {
+        narrative: `接下来补充网络侧信息，交叉验证替代产品与竞品动态。`,
+        tools: [{ label: `搜索网络：${companyName} 替代产品 竞品` }]
+      }
+    ],
+    发展规划: [
+      {
+        narrative: `我在检索${companyName}的战略动态与未来规划线索。`,
+        tools: [
+          { label: `MOSS-战略动态库：${companyName}` },
+          { label: `MOSS-AI搜索：${companyName} 未来规划` }
+        ]
+      },
+      {
+        narrative: `我将梳理管理层表态与业务扩张线索，推演合作窗口。`,
+        tools: [
+          { label: drawBriefLabel(`${companyName}发展规划`), failed: shouldInjectFailure },
+          { label: "梳理管理层表态与业务扩张线索" },
+          { label: "推演未来机会与合作窗口" }
+        ]
+      },
+      {
+        narrative: `接下来补充网络侧战略与发展信息。`,
+        tools: [{ label: `搜索网络：${companyName} 战略 发展 规划` }]
+      }
+    ],
+    组织与关键人: [
+      {
+        narrative: `我在查询${companyName}的组织架构与关键人员信息。`,
+        tools: [
+          { label: `MOSS-组织与人员库：${companyName}` },
+          { label: `MOSS-AI搜索：${companyName} 员工 团队` }
+        ]
+      },
+      {
+        narrative: `我将估算组织结构与岗位线索，整理拜访路径。`,
+        tools: [
+          { label: drawBriefLabel(`${companyName}组织关键人`), failed: shouldInjectFailure },
+          { label: "估算组织结构与岗位年龄线索" },
+          { label: "整理关键部门与拜访路径" }
+        ]
+      },
+      {
+        narrative: `接下来补充网络侧招聘与管理层公开信息。`,
+        tools: [{ label: `搜索网络：${companyName} 招聘 管理层` }]
+      }
+    ],
+    风险尽调: [
+      {
+        narrative: `我在检索${companyName}的风险与合规信号，先查内部风险库。`,
+        tools: [
+          { label: `MOSS-企业风险库：${companyName}` },
+          { label: `MOSS-司法与合规检索：${companyName}` }
+        ]
+      },
+      {
+        narrative: `我将识别高风险事件与影响范围，生成缓释建议。`,
+        tools: [
+          { label: drawBriefLabel(`${companyName}风险尽调`), failed: shouldInjectFailure },
+          { label: "识别高风险事件与影响范围" },
+          { label: "生成风险等级与缓释建议" }
+        ]
+      },
+      {
+        narrative: `接下来补充网络侧风险、合规与舆情信息。`,
+        tools: [{ label: `搜索网络：${companyName} 风险 合规 舆情` }]
+      }
+    ],
+    舆情监控: [
+      {
+        narrative: `我在聚合${companyName}的舆情信号，先检索内部舆情库。`,
+        tools: [
+          { label: `MOSS-舆情信号库：${companyName}` },
+          { label: `MOSS-AI搜索：${companyName} 投诉 负面` }
+        ]
+      },
+      {
+        narrative: `我将整理高敏感信号，并生成响应优先级与话术建议。`,
+        tools: [
+          { label: drawBriefLabel(`${companyName}舆情监控`), failed: shouldInjectFailure },
+          { label: "聚合近24小时高敏感信号" },
+          { label: "生成响应优先级与话术建议" }
+        ]
+      },
+      {
+        narrative: `接下来补充网络侧舆情与危机相关信息。`,
+        tools: [{ label: `搜索网络：${companyName} 舆情 危机` }]
+      }
+    ],
+    销售拓客洞察: [
+      {
+        narrative: `我在检索${companyName}的企业画像与内部资料，准备交叉验证。`,
+        tools: [
+          { label: `MOSS-企业画像库：${companyName}` },
+          { label: `MOSS-AI搜索：${companyName}` }
+        ]
+      },
+      {
+        narrative: `我将整理公开来源证据链，并生成销售拓客速读。`,
+        tools: [
+          { label: drawBriefLabel(`${companyName}拓客洞察`), failed: shouldInjectFailure },
+          { label: "交叉验证公开来源" },
+          { label: "生成销售拓客速读" }
+        ]
+      },
+      {
+        narrative: `接下来补充网络侧公开信息，完成最终校验。`,
+        tools: [{ label: `搜索网络：${companyName}` }]
+      }
+    ]
+  };
+
+  return groupsByTopic[topic] ?? groupsByTopic.销售拓客洞察;
+}
+
+function buildThinkingChainItems(agent: AgentKey, question: string): ThinkingChainItem[] {
+  if (!buildSessionTitle(question)) return DEFAULT_THINKING_CHAIN_ITEMS;
 
   const companyName = inferCompanyName(question);
   const topic = inferThinkingTopic(question);
   const hash = getStableHash(`${agent}-${question}`);
+  const shouldInjectFailure = hash % 7 === 3;
   const skillPath =
     agent === "风险管理"
       ? "skills/risk-management/SKILL.md"
       : agent === "舆情监控"
         ? "skills/public-opinion/SKILL.md"
         : "skills/customer-insight/SKILL.md";
-  const openingSteps = [`阅读 "${skillPath}"`, `解析问题意图：${topic}`];
-  const scenarioSteps: Record<string, string[]> = {
-    财务与经营表现: [
-      `MOSS-企业经营库：${companyName}`,
-      `MOSS-财务指标检索：${companyName}`,
-      `搜索网络：${companyName} 销售额 营收`,
-      "交叉核验年报、新闻与公开披露",
-      "提炼收入口径与可信度说明"
-    ],
-    客户行业分布: [
-      `MOSS-客户案例库：${companyName}`,
-      `MOSS-行业样本聚类：${companyName}`,
-      `搜索网络：${companyName} 客户 行业 分布`,
-      "归并客户行业标签与典型场景",
-      "生成销售切入优先级"
-    ],
-    竞争格局: [
-      `MOSS-竞品图谱：${companyName}`,
-      `MOSS-AI搜索：${companyName} 竞争对手`,
-      `搜索网络：${companyName} 替代产品 竞品`,
-      "对比产品能力、客群与价格带",
-      "输出竞争应对要点"
-    ],
-    发展规划: [
-      `MOSS-战略动态库：${companyName}`,
-      `MOSS-AI搜索：${companyName} 未来规划`,
-      `搜索网络：${companyName} 战略 发展 规划`,
-      "梳理管理层表态与业务扩张线索",
-      "推演未来机会与合作窗口"
-    ],
-    组织与关键人: [
-      `MOSS-组织与人员库：${companyName}`,
-      `MOSS-AI搜索：${companyName} 员工 团队`,
-      `搜索网络：${companyName} 招聘 管理层`,
-      "估算组织结构与岗位年龄线索",
-      "整理关键部门与拜访路径"
-    ],
-    风险尽调: [
-      `MOSS-企业风险库：${companyName}`,
-      `MOSS-司法与合规检索：${companyName}`,
-      `搜索网络：${companyName} 风险 合规 舆情`,
-      "识别高风险事件与影响范围",
-      "生成风险等级与缓释建议"
-    ],
-    舆情监控: [
-      `MOSS-舆情信号库：${companyName}`,
-      `MOSS-AI搜索：${companyName} 投诉 负面`,
-      `搜索网络：${companyName} 舆情 危机`,
-      "聚合近24小时高敏感信号",
-      "生成响应优先级与话术建议"
-    ],
-    销售拓客洞察: [
-      `MOSS-企业画像库：${companyName}`,
-      `MOSS-AI搜索：${companyName}`,
-      `搜索网络：${companyName}`,
-      "交叉验证公开来源",
-      "生成销售拓客速读"
-    ]
-  };
   const optionalSteps = [
-    "加载行业口径与指标规范",
-    "过滤低可信来源与重复信息",
-    "补充可落地拜访动作",
-    "整理引用来源与证据链"
+    {
+      label: "加载行业口径与指标规范",
+      narrative: "加载行业口径与指标规范，确保后续结论口径一致。"
+    },
+    {
+      label: "过滤低可信来源与重复信息",
+      narrative: "过滤低可信来源与重复信息，提升结论可信度。"
+    },
+    {
+      label: "补充可落地拜访动作",
+      narrative: "补充可落地拜访动作，让结论更贴近销售推进。"
+    },
+    {
+      label: "整理引用来源与证据链",
+      narrative: "整理引用来源与证据链，方便后续追溯与复核。"
+    }
   ];
   const selectedOptionalStep = optionalSteps[hash % optionalSteps.length];
+  const items: ThinkingChainItem[] = [
+    { type: "narrative", text: "我将完整展示本次思考过程。我会先阅读相关技能，再开始工作。" },
+    { type: "tool", label: `阅读 "${skillPath}"` },
+    { type: "tool", label: `解析问题意图：${topic}` }
+  ];
 
-  return [...openingSteps, ...(scenarioSteps[topic] ?? scenarioSteps.销售拓客洞察), selectedOptionalStep];
+  for (const group of getThinkingToolGroupsForTopic(companyName, topic, shouldInjectFailure)) {
+    items.push({ type: "narrative", text: group.narrative });
+    for (const tool of group.tools) {
+      items.push({ type: "tool", label: tool.label, failed: tool.failed });
+    }
+  }
+
+  items.push({ type: "narrative", text: selectedOptionalStep.narrative });
+  items.push({ type: "tool", label: selectedOptionalStep.label });
+
+  return items;
+}
+
+function countThinkingChainTools(items: ThinkingChainItem[]): number {
+  return items.filter((item) => item.type === "tool").length;
 }
 
 function getThinkingStartDelay(run: ConversationRun) {
@@ -1250,9 +1442,9 @@ function ResolutionIcon({ type, selected = false }: { type: "resolved" | "partia
   );
 }
 
-function LoadingSpinnerIcon() {
+function LoadingSpinnerIcon({ className }: { className?: string }) {
   return (
-    <span className="chat-loading-spinner">
+    <span className={className ? `chat-loading-spinner ${className}` : "chat-loading-spinner"}>
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id="chat-loading-spinner-gradient-1" x1="50%" x2="50%" y1="5.271%" y2="91.793%">
@@ -1286,8 +1478,79 @@ function getThinkingStepIcon(step: string) {
   if (step.includes("解析") || step.includes("过滤") || step.includes("整理")) return "jiazaishejiguifan";
   if (step.includes("搜索网络") || step.includes("AI搜索")) return "sousuowaibu";
   if (step.includes("MOSS-")) return "sousuoneibu";
-  if (step.includes("生成") || step.includes("输出") || step.includes("提炼") || step.includes("推演")) return "huizhi";
+  if (step.includes("绘制") || step.includes("生成") || step.includes("输出") || step.includes("提炼") || step.includes("推演"))
+    return "huizhi";
   return "gongju";
+}
+
+function renderThinkingChainItems(items: ThinkingChainItem[], run: ConversationRun) {
+  const visibleItems = items.slice(0, run.visibleSteps);
+  const isProcessing = run.stage !== "done";
+
+  return visibleItems.map((item, index) => {
+    if (item.type === "narrative") {
+      return (
+        <p key={`thinking-narrative-${index}`} className="chat-thinking-narrative">
+          {item.text}
+        </p>
+      );
+    }
+
+    const isLastVisible = index === visibleItems.length - 1;
+    const isFirstInGroup = index === 0 || visibleItems[index - 1]?.type === "narrative";
+    const isLastInGroup = index === visibleItems.length - 1 || visibleItems[index + 1]?.type !== "tool";
+    const railClassName = [
+      "chat-thinking-tool-rail",
+      isFirstInGroup ? "is-group-start" : "",
+      isLastInGroup ? "is-group-end" : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    let stepClassName = "chat-thinking-tool";
+    let iconNode: ReactNode;
+
+    if (item.failed) {
+      stepClassName += " is-failed";
+      iconNode = <Icon name="toasttishi_jinggao_xian" />;
+    } else if (isLastVisible && isProcessing) {
+      stepClassName += " is-loading";
+      iconNode = <LoadingSpinnerIcon />;
+    } else {
+      iconNode = <Icon name={getThinkingStepIcon(item.label)} />;
+    }
+
+    return (
+      <div key={`thinking-tool-${index}-${item.label}`} className={stepClassName}>
+        <div className={railClassName} aria-hidden="true">
+          <span className="chat-thinking-tool-rail-line chat-thinking-tool-rail-line-top" />
+          <span className="chat-thinking-tool-icon">{iconNode}</span>
+          <span className="chat-thinking-tool-rail-line chat-thinking-tool-rail-line-bottom" />
+        </div>
+        <span className="chat-thinking-tool-label">{item.label}</span>
+      </div>
+    );
+  });
+}
+
+function getSessionLastRun(runs: ConversationRun[]): ConversationRun | null {
+  return runs[runs.length - 1] ?? null;
+}
+
+function isRunGenerating(run: ConversationRun): boolean {
+  return !run.isStopped && (run.stage !== "done" || run.conclusionVisibleLength < run.conclusionMarkdown.length);
+}
+
+function isSessionRunGenerating(runs: ConversationRun[]): boolean {
+  const lastRun = getSessionLastRun(runs);
+  return lastRun ? isRunGenerating(lastRun) : false;
+}
+
+function findSessionAgentKey(agentHistories: AgentHistoryMap, sessionId: string): AgentKey | null {
+  for (const agent of AGENTS) {
+    if (agentHistories[agent].some((session) => session.id === sessionId)) return agent;
+  }
+  return null;
 }
 
 function App() {
@@ -1301,7 +1564,8 @@ function App() {
   const [activeAgentIndex, setActiveAgentIndex] = useState(0);
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
   const [isNewChatActive, setIsNewChatActive] = useState(true);
-  const [conversationRuns, setConversationRuns] = useState<ConversationRun[]>([]);
+  const [sessionConversationRuns, setSessionConversationRuns] = useState<SessionConversationRunsMap>({});
+  const activeHistoryIdRef = useRef<string | null>(null);
   const [answerFeedback, setAnswerFeedback] = useState<AnswerFeedback>(null);
   const [answerResolutionFeedback, setAnswerResolutionFeedback] = useState<AnswerResolutionFeedback>(null);
   const [pendingResolutionFeedback, setPendingResolutionFeedback] = useState<ResolutionPopconfirmValue | null>(null);
@@ -1399,20 +1663,63 @@ function App() {
     return PROMPTS[activeTab];
   }, [activeAgent, activeTab]);
   const activeAgentHistories = useMemo(() => agentHistories[activeAgent], [activeAgent, agentHistories]);
+  const conversationRuns = useMemo(
+    () => (activeHistoryId ? sessionConversationRuns[activeHistoryId] ?? [] : []),
+    [activeHistoryId, sessionConversationRuns]
+  );
   const activeRun = conversationRuns[conversationRuns.length - 1] ?? null;
   const hasConversation = conversationRuns.length > 0;
+  const getSessionRuns = (sessionId: string) => sessionConversationRuns[sessionId] ?? [];
+  const isSessionGenerating = (sessionId: string) => isSessionRunGenerating(getSessionRuns(sessionId));
+  const updateSessionRuns = (
+    sessionId: string,
+    updater: (currentRuns: ConversationRun[]) => ConversationRun[]
+  ) => {
+    setSessionConversationRuns((currentMap) => {
+      const currentRuns = currentMap[sessionId] ?? [];
+      const nextRuns = updater(currentRuns);
+      if (nextRuns === currentRuns) return currentMap;
+      if (nextRuns.length === 0) {
+        const { [sessionId]: _removed, ...rest } = currentMap;
+        return rest;
+      }
+      return { ...currentMap, [sessionId]: nextRuns };
+    });
+  };
+  const updateSessionLastRun = (
+    sessionId: string,
+    nextRun: ConversationRun | null | ((current: ConversationRun | null) => ConversationRun | null)
+  ) => {
+    updateSessionRuns(sessionId, (currentRuns) => {
+      const currentRun = getSessionLastRun(currentRuns);
+      const resolvedRun = typeof nextRun === "function" ? nextRun(currentRun) : nextRun;
+      if (!resolvedRun) return [];
+      if (currentRuns.length === 0) return [resolvedRun];
+      return currentRuns.map((run, index) => (index === currentRuns.length - 1 ? resolvedRun : run));
+    });
+  };
+  const markSessionUnread = (sessionId: string, agentKey: AgentKey) => {
+    if (activeHistoryIdRef.current === sessionId) return;
+    setAgentHistories((prev) => ({
+      ...prev,
+      [agentKey]: prev[agentKey].map((session) =>
+        session.id === sessionId && !session.hasUnread ? { ...session, hasUnread: true } : session
+      )
+    }));
+  };
+  const clearSessionUnread = (sessionId: string) => {
+    setAgentHistories((prev) => ({
+      ...prev,
+      [activeAgent]: prev[activeAgent].map((session) =>
+        session.id === sessionId && session.hasUnread ? { ...session, hasUnread: false } : session
+      )
+    }));
+  };
   const setActiveRun = (
     nextRun: ConversationRun | null | ((current: ConversationRun | null) => ConversationRun | null)
   ) => {
-    setConversationRuns((currentRuns) => {
-      const currentRun = currentRuns[currentRuns.length - 1] ?? null;
-      const resolvedRun = typeof nextRun === "function" ? nextRun(currentRun) : nextRun;
-
-      if (!resolvedRun) return [];
-      if (currentRuns.length === 0) return [resolvedRun];
-
-      return currentRuns.map((run, index) => (index === currentRuns.length - 1 ? resolvedRun : run));
-    });
+    if (!activeHistoryId) return;
+    updateSessionLastRun(activeHistoryId, nextRun);
   };
   const isSidebarCollapsed = collapsed || isAutoCollapsed;
   const visibleFiles = useMemo(() => {
@@ -1555,7 +1862,7 @@ function App() {
 
     const timerId = window.setTimeout(() => {
       setIsResolutionThanksVisible(true);
-    }, 1600);
+    }, 880);
 
     return () => window.clearTimeout(timerId);
   }, [answerResolutionFeedback]);
@@ -1907,6 +2214,10 @@ function App() {
   }, [deleteConfirmFileName]);
 
   useEffect(() => {
+    activeHistoryIdRef.current = activeHistoryId;
+  }, [activeHistoryId]);
+
+  useEffect(() => {
     if (!activeHistoryId) return;
     const existsInCurrentAgent = activeAgentHistories.some((session) => session.id === activeHistoryId);
     if (!existsInCurrentAgent) {
@@ -1921,7 +2232,6 @@ function App() {
   useEffect(() => {
     setIsNewChatActive(true);
     setActiveHistoryId(null);
-    setActiveRun(null);
     shouldFollowChatRef.current = true;
     hasUserInterruptedChatScrollRef.current = false;
     setIsChatAtBottom(true);
@@ -1958,87 +2268,111 @@ function App() {
   }, [isSidebarCollapsed]);
 
   useEffect(() => {
-    if (!activeRun) return;
-    if (!activeRun.responseStarted) {
-      const startTimerId = window.setTimeout(() => {
-        setActiveRun((current) => {
-          if (!current || current.id !== activeRun.id || current.responseStarted || current.isStopped) return current;
-          return {
-            ...current,
-            responseStarted: true
-          };
-        });
-      }, getThinkingStartDelay(activeRun));
+    const timeoutIds: number[] = [];
 
-      return () => window.clearTimeout(startTimerId);
-    }
+    Object.entries(sessionConversationRuns).forEach(([sessionId, runs]) => {
+      const run = getSessionLastRun(runs);
+      if (!run || run.isStopped || !isRunGenerating(run)) return;
 
-    const totalSteps = buildThinkingChainSteps(activeAgent, activeRun.question).length;
+      if (!run.responseStarted) {
+        timeoutIds.push(
+          window.setTimeout(() => {
+            updateSessionLastRun(sessionId, (current) => {
+              if (!current || current.id !== run.id || current.responseStarted || current.isStopped) return current;
+              return {
+                ...current,
+                responseStarted: true
+              };
+            });
+          }, getThinkingStartDelay(run))
+        );
+        return;
+      }
 
-    if (activeRun.stage === "thinking") {
-      const thinkingTimerId = window.setTimeout(() => {
-        setActiveRun((current) => {
-          if (!current || current.id !== activeRun.id || current.stage !== "thinking" || current.isStopped) return current;
-          return {
-            ...current,
-            stage: "processing"
-          };
-        });
-      }, getThinkingTransitionDelay(activeRun));
+      const totalSteps = buildThinkingChainItems(run.agentKey, run.question).length;
 
-      return () => window.clearTimeout(thinkingTimerId);
-    }
+      if (run.stage === "thinking") {
+        timeoutIds.push(
+          window.setTimeout(() => {
+            updateSessionLastRun(sessionId, (current) => {
+              if (!current || current.id !== run.id || current.stage !== "thinking" || current.isStopped) return current;
+              return {
+                ...current,
+                stage: "processing"
+              };
+            });
+          }, getThinkingTransitionDelay(run))
+        );
+        return;
+      }
 
-    if (activeRun.stage === "done") return;
+      if (run.stage === "done") return;
 
-    const timerId = window.setTimeout(() => {
-      setActiveRun((current) => {
-        if (!current || current.id !== activeRun.id || current.isStopped) return current;
+      timeoutIds.push(
+        window.setTimeout(() => {
+          updateSessionLastRun(sessionId, (current) => {
+            if (!current || current.id !== run.id || current.isStopped) return current;
 
-        if (current.stage === "processing" && current.visibleSteps < totalSteps) {
-          return { ...current, visibleSteps: current.visibleSteps + 1 };
-        }
-        if (current.stage === "processing") {
-          return {
-            ...current,
-            stage: "done",
-            completedAt: new Date().toISOString(),
-            isThinkingExpanded: false
-          };
-        }
-        return current;
-      });
-    }, activeRun.visibleSteps < totalSteps ? getThinkingStepDelay(activeRun) : getThinkingFinishDelay(activeRun));
+            if (current.stage === "processing" && current.visibleSteps < totalSteps) {
+              return { ...current, visibleSteps: current.visibleSteps + 1 };
+            }
+            if (current.stage === "processing") {
+              return {
+                ...current,
+                stage: "done",
+                completedAt: new Date().toISOString(),
+                isThinkingExpanded: false
+              };
+            }
+            return current;
+          });
+        }, run.visibleSteps < totalSteps ? getThinkingStepDelay(run) : getThinkingFinishDelay(run))
+      );
+    });
 
-    return () => window.clearTimeout(timerId);
-  }, [activeRun, activeAgent]);
+    return () => timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+  }, [sessionConversationRuns]);
 
   useEffect(() => {
-    if (!activeRun || activeRun.stage !== "done") return;
-    if (activeRun.isStopped) return;
-    if (activeRun.conclusionVisibleLength >= activeRun.conclusionMarkdown.length) return;
+    const timeoutIds: number[] = [];
 
-    const { chunkSize, delayMs } = getConclusionStreamAdvance(
-      activeRun.conclusionMarkdown,
-      activeRun.conclusionVisibleLength
-    );
+    Object.entries(sessionConversationRuns).forEach(([sessionId, runs]) => {
+      const run = getSessionLastRun(runs);
+      if (!run || run.stage !== "done") return;
+      if (run.isStopped) return;
+      if (run.conclusionVisibleLength >= run.conclusionMarkdown.length) return;
 
-    const streamTimerId = window.setTimeout(() => {
-      setActiveRun((current) => {
-        if (!current || current.id !== activeRun.id || current.stage !== "done" || current.isStopped) return current;
+      const { chunkSize, delayMs } = getConclusionStreamAdvance(
+        run.conclusionMarkdown,
+        run.conclusionVisibleLength
+      );
 
-        return {
-          ...current,
-          conclusionVisibleLength: Math.min(
-            current.conclusionMarkdown.length,
-            current.conclusionVisibleLength + chunkSize
-          )
-        };
-      });
-    }, delayMs);
+      timeoutIds.push(
+        window.setTimeout(() => {
+          updateSessionLastRun(sessionId, (current) => {
+            if (!current || current.id !== run.id || current.stage !== "done" || current.isStopped) return current;
 
-    return () => window.clearTimeout(streamTimerId);
-  }, [activeRun]);
+            const nextVisibleLength = Math.min(
+              current.conclusionMarkdown.length,
+              current.conclusionVisibleLength + chunkSize
+            );
+            const isComplete = nextVisibleLength >= current.conclusionMarkdown.length;
+
+            if (isComplete && activeHistoryIdRef.current !== sessionId) {
+              markSessionUnread(sessionId, current.agentKey);
+            }
+
+            return {
+              ...current,
+              conclusionVisibleLength: nextVisibleLength
+            };
+          });
+        }, delayMs)
+      );
+    });
+
+    return () => timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+  }, [sessionConversationRuns]);
 
   useEffect(() => {
     if (!activeRun) return;
@@ -2108,7 +2442,6 @@ function App() {
   const activateNewChat = () => {
     setIsNewChatActive(true);
     setActiveHistoryId(null);
-    setActiveRun(null);
     shouldFollowChatRef.current = true;
     hasUserInterruptedChatScrollRef.current = false;
     setIsChatAtBottom(true);
@@ -2129,6 +2462,7 @@ function App() {
     if (!normalizedText) return;
 
     const shouldCreateSession = isNewChatActive || !activeHistoryId;
+    const targetSessionId = shouldCreateSession ? `session-${Date.now()}` : activeHistoryId!;
     shouldFollowChatRef.current = true;
     hasUserInterruptedChatScrollRef.current = false;
     setIsChatAtBottom(true);
@@ -2146,27 +2480,27 @@ function App() {
     const now = new Date().toISOString();
 
     if (shouldCreateSession) {
-      const sessionId = `session-${Date.now()}`;
       const nextSession: HistorySession = {
-        id: sessionId,
+        id: targetSessionId,
         title: normalizedText,
         question: normalizedText,
         createdAt: now,
         updatedAt: now,
-        isFavorite: false
+        isFavorite: false,
+        hasUnread: false
       };
 
       setAgentHistories((prev) => ({
         ...prev,
         [activeAgent]: [nextSession, ...prev[activeAgent]]
       }));
-      setActiveHistoryId(sessionId);
+      setActiveHistoryId(targetSessionId);
       setIsNewChatActive(false);
     } else {
       setAgentHistories((prev) => ({
         ...prev,
         [activeAgent]: prev[activeAgent].map((session) =>
-          session.id === activeHistoryId ? { ...session, updatedAt: now } : session
+          session.id === targetSessionId ? { ...session, updatedAt: now, hasUnread: false } : session
         )
       }));
     }
@@ -2174,6 +2508,7 @@ function App() {
     const nextRun: ConversationRun = {
       id: `run-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       question: normalizedText,
+      agentKey: activeAgent,
       createdAt: now,
       conclusionMarkdown: buildConversationConclusionMarkdown(activeAgent, normalizedText),
       conclusionVisibleLength: 0,
@@ -2185,7 +2520,7 @@ function App() {
       actionVariant: createActionVariant()
     };
 
-    setConversationRuns((currentRuns) => (shouldCreateSession ? [nextRun] : [...currentRuns, nextRun]));
+    updateSessionRuns(targetSessionId, (currentRuns) => (shouldCreateSession ? [nextRun] : [...currentRuns, nextRun]));
   };
 
   const onSend = () => {
@@ -2460,7 +2795,9 @@ function App() {
     setIsResolutionThanksVisible(false);
     setIsSourceDrawerOpen(false);
 
-    setConversationRuns((currentRuns) =>
+    if (!run || !activeHistoryId) return;
+
+    updateSessionRuns(activeHistoryId, (currentRuns) =>
       currentRuns.map((currentRun) =>
         currentRun.id === run.id
           ? {
@@ -2473,7 +2810,8 @@ function App() {
               visibleSteps: 0,
               responseStarted: false,
               isThinkingExpanded: true,
-              isStopped: false
+              isStopped: false,
+              agentKey: activeAgent
             }
           : currentRun
       )
@@ -2535,6 +2873,7 @@ function App() {
   const openHistorySession = (session: HistorySession) => {
     if (renamingHistory) return;
 
+    const existingRuns = getSessionRuns(session.id);
     const doneAt = session.updatedAt;
     const question = getHistorySessionQuestion(session);
     const conclusionMarkdown = buildConversationConclusionMarkdown(activeAgent, question);
@@ -2552,20 +2891,29 @@ function App() {
     setCurrentConversationFileNames([]);
     setActiveHistoryId(session.id);
     setIsNewChatActive(false);
-    setConversationRuns([{
-      id: `history-run-${session.id}`,
-      question,
-      createdAt: doneAt,
-      completedAt: doneAt,
-      conclusionMarkdown,
-      conclusionVisibleLength: conclusionMarkdown.length,
-      stage: "done",
-      visibleSteps: buildThinkingChainSteps(activeAgent, question).length,
-      responseStarted: true,
-      isThinkingExpanded: false,
-      isStopped: false,
-      actionVariant: getStableActionVariant(session.id)
-    }]);
+    clearSessionUnread(session.id);
+    setOpenHistoryMenu(null);
+    setOpenCollapsedPopover(null);
+
+    if (existingRuns.length > 0) return;
+
+    updateSessionRuns(session.id, () => [
+      {
+        id: `history-run-${session.id}`,
+        question,
+        agentKey: activeAgent,
+        createdAt: doneAt,
+        completedAt: doneAt,
+        conclusionMarkdown,
+        conclusionVisibleLength: conclusionMarkdown.length,
+        stage: "done",
+        visibleSteps: buildThinkingChainItems(activeAgent, question).length,
+        responseStarted: true,
+        isThinkingExpanded: false,
+        isStopped: false,
+        actionVariant: getStableActionVariant(session.id)
+      }
+    ]);
   };
 
   const startHistoryRename = (session: HistorySession) => {
@@ -2615,6 +2963,7 @@ function App() {
       ...prev,
       [activeAgent]: prev[activeAgent].filter((session) => session.id !== sessionId)
     }));
+    updateSessionRuns(sessionId, () => []);
     if (activeHistoryId === sessionId) {
       setActiveHistoryId(null);
       setIsNewChatActive(true);
@@ -4255,6 +4604,7 @@ function App() {
         }}
       >
         <span className="collapsed-history-item-label">{session.title}</span>
+        {renderHistorySessionStatus(session)}
       </button>
     ));
   };
@@ -4295,8 +4645,9 @@ function App() {
     const content =
       openCollapsedPopover.type === "agent" ? (
         <div className="collapsed-popover-stack">
-          {SIDEBAR_AGENT_ITEMS.map((item, index) => {
-            const selected = activeAgentIndex === index;
+          {SIDEBAR_AGENT_ITEMS.filter(isVisibleSidebarAgent).map((item) => {
+            const agentIndex = getSidebarAgentIndex(item);
+            const selected = agentIndex !== null && activeAgentIndex === agentIndex;
             return (
               <button
                 key={item.name}
@@ -4311,8 +4662,8 @@ function App() {
                 disabled={item.disabled}
                 aria-disabled={item.disabled ? true : undefined}
                 onClick={() => {
-                  if (item.disabled) return;
-                  setActiveAgentIndex(index);
+                  if (item.disabled || agentIndex === null) return;
+                  setActiveAgentIndex(agentIndex);
                   setOpenCollapsedPopover(null);
                   setCollapsedTooltip(null);
                 }}
@@ -4363,6 +4714,22 @@ function App() {
       </div>,
       document.body
     );
+  };
+
+  const renderHistorySessionStatus = (session: HistorySession) => {
+    if (isSessionGenerating(session.id)) {
+      return (
+        <span className="history-item-status history-item-status-loading" aria-hidden="true">
+          <LoadingSpinnerIcon className="history-item-loading-spinner" />
+        </span>
+      );
+    }
+
+    if (session.hasUnread) {
+      return <span className="history-item-status history-item-status-unread" aria-hidden="true" />;
+    }
+
+    return null;
   };
 
   const renderHistorySection = (group: HistoryGroupKey, label: string, items: HistorySession[]) => {
@@ -4448,28 +4815,31 @@ function App() {
                     >
                       <span className="history-item-label">{session.title}</span>
                     </button>
-                    <button
-                      type="button"
-                      className="history-item-more"
-                      aria-label="更多"
-                      aria-haspopup="menu"
-                      aria-expanded={openHistoryMenu?.sessionId === session.id}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        const rect = event.currentTarget.getBoundingClientRect();
-                        setOpenHistoryMenu((prev) =>
-                          prev?.sessionId === session.id
-                            ? null
-                            : {
-                                sessionId: session.id,
-                                left: rect.left,
-                                top: rect.bottom + 4
-                              }
-                        );
-                      }}
-                    >
-                      <Icon name="gengduo" />
-                    </button>
+                    <div className="history-item-trailing">
+                      {renderHistorySessionStatus(session)}
+                      <button
+                        type="button"
+                        className="history-item-more"
+                        aria-label="更多"
+                        aria-haspopup="menu"
+                        aria-expanded={openHistoryMenu?.sessionId === session.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          setOpenHistoryMenu((prev) =>
+                            prev?.sessionId === session.id
+                              ? null
+                              : {
+                                  sessionId: session.id,
+                                  left: rect.left,
+                                  top: rect.bottom + 4
+                                }
+                          );
+                        }}
+                      >
+                        <Icon name="gengduo" />
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
@@ -4524,25 +4894,20 @@ function App() {
             </button>
           </div>
 
-          <div className="sidebar-body">
-            <div
-              className={
-                isSidebarCollapsed
-                  ? "sidebar-panel sidebar-panel-expanded is-hidden"
-                  : "sidebar-panel sidebar-panel-expanded is-visible"
-              }
-              aria-hidden={isSidebarCollapsed}
-            >
-              <div className="sidebar-content">
+          {!isSidebarCollapsed ? (
+            <>
+              <div className="sidebar-content-top">
                 <section className="side-group">
                   <div className="side-label">我的 Agent</div>
-                  {SIDEBAR_AGENT_ITEMS.map((item, index) => (
+                  {SIDEBAR_AGENT_ITEMS.filter(isVisibleSidebarAgent).map((item) => {
+                    const agentIndex = getSidebarAgentIndex(item);
+                    return (
                     <button
                       key={item.name}
                       type="button"
                       className={[
                         "agent-item",
-                        activeAgentIndex === index ? "selected" : "",
+                        agentIndex !== null && activeAgentIndex === agentIndex ? "selected" : "",
                         item.disabled ? "disabled" : ""
                       ]
                         .filter(Boolean)
@@ -4550,8 +4915,8 @@ function App() {
                       disabled={item.disabled}
                       aria-disabled={item.disabled ? true : undefined}
                       onClick={() => {
-                        if (item.disabled) return;
-                        setActiveAgentIndex(index);
+                        if (item.disabled || agentIndex === null) return;
+                        setActiveAgentIndex(agentIndex);
                       }}
                     >
                       <span className="avatar">
@@ -4559,7 +4924,8 @@ function App() {
                       </span>
                       <span>{item.name}</span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </section>
 
                 <div className="divider" />
@@ -4571,7 +4937,9 @@ function App() {
                 >
                   <Icon name="xinhuihua" /> 新会话
                 </button>
+              </div>
 
+              <div className="sidebar-content-scroll">
                 {historyGroups.favorites.length > 0
                   ? renderHistorySection("favorites", "收藏", historyGroups.favorites)
                   : null}
@@ -4579,17 +4947,11 @@ function App() {
                 {renderHistorySection("yesterday", "昨天", historyGroups.yesterday)}
                 {renderHistorySection("earlier", "更早", historyGroups.earlier)}
               </div>
-            </div>
-
-            <div
-              className={
-                isSidebarCollapsed
-                  ? "sidebar-panel sidebar-panel-collapsed is-visible"
-                  : "sidebar-panel sidebar-panel-collapsed is-hidden"
-              }
-              aria-hidden={!isSidebarCollapsed}
-            >
-              <div className="collapsed-stream">
+            </>
+          ) : (
+            <div className="sidebar-body">
+              <div className="sidebar-panel sidebar-panel-collapsed is-visible" aria-hidden={false}>
+                <div className="collapsed-stream">
                 <button
                   type="button"
                   className="icon-btn nav-icon current-agent-icon"
@@ -4661,6 +5023,12 @@ function App() {
               </div>
             </div>
           </div>
+          )}
+          {!isSidebarCollapsed ? (
+            <button type="button" className="sidebar-case-center" aria-label="案例中心">
+              <img className="sidebar-case-center-media" src={caseCenterBanner} alt="" />
+            </button>
+          ) : null}
         </div>
 
         <div className="sidebar-footer">
@@ -4710,6 +5078,17 @@ function App() {
           >
             <div className="sidebar-footer-collapsed-inner">
               <div className="sidebar-footer-collapsed-actions">
+                <button
+                  type="button"
+                  className="icon-btn nav-icon secondary-nav-icon sidebar-case-center-collapsed"
+                  aria-label="案例中心"
+                  onMouseEnter={(event) => showCollapsedTooltip("案例中心", event.currentTarget.getBoundingClientRect())}
+                  onMouseLeave={hideCollapsedTooltip}
+                  onFocus={(event) => showCollapsedTooltip("案例中心", event.currentTarget.getBoundingClientRect())}
+                  onBlur={hideCollapsedTooltip}
+                >
+                  <img className="sidebar-case-center-collapsed-icon" src={caseCenterCollapsedIcon} alt="" />
+                </button>
                 <button
                   type="button"
                   className={
@@ -4813,12 +5192,13 @@ function App() {
                   <div className="chat-stage-content">
                     {conversationRuns.map((run) => {
                       const isLatestRun = activeRun?.id === run.id;
+                      const runAgent = run.agentKey;
                       const runIsAnswerComplete =
                         !run.isStopped &&
                         run.stage === "done" &&
                         run.conclusionVisibleLength >= run.conclusionMarkdown.length;
-                      const runFollowUpQuestions = buildFollowUpQuestions(activeAgent, run.question);
-                      const runThinkingSteps = buildThinkingChainSteps(activeAgent, run.question);
+                      const runFollowUpQuestions = buildFollowUpQuestions(runAgent, run.question);
+                      const runThinkingItems = buildThinkingChainItems(runAgent, run.question);
 
                       return (
                         <div key={run.id} className="chat-turn">
@@ -4830,9 +5210,9 @@ function App() {
                             <div className="chat-answer-row">
                               <div className="chat-answer-meta">
                                 <span className="avatar">
-                                  <img src={AGENT_ICON_MAP[activeAgent]} alt="" />
+                                  <img src={AGENT_ICON_MAP[runAgent]} alt="" />
                                 </span>
-                                <span>{activeAgent}</span>
+                                <span>{runAgent}</span>
                                 <span className="chat-time">刚刚</span>
                               </div>
                               <div className="chat-thinking-card">
@@ -4841,8 +5221,9 @@ function App() {
                                     <button
                                       type="button"
                                       className={run.isThinkingExpanded ? "chat-thinking-toggle expanded" : "chat-thinking-toggle"}
-                                      onClick={() =>
-                                        setConversationRuns((currentRuns) =>
+                                      onClick={() => {
+                                        if (!activeHistoryId) return;
+                                        updateSessionRuns(activeHistoryId, (currentRuns) =>
                                           currentRuns.map((item) =>
                                             item.id === run.id
                                               ? {
@@ -4851,8 +5232,8 @@ function App() {
                                                 }
                                               : item
                                           )
-                                        )
-                                      }
+                                        );
+                                      }}
                                     >
                                       <span className="chat-thinking-status">
                                         {`全部工作已完成，耗时${formatRunElapsedSeconds(run)}s`}
@@ -4869,7 +5250,7 @@ function App() {
                                         setIsSourceDrawerOpen(true);
                                       }}
                                     >
-                                      {`${Math.min(5, runThinkingSteps.length)} 信息来源`}
+                                      {`${Math.min(5, countThinkingChainTools(runThinkingItems))} 信息来源`}
                                     </button>
                                   </div>
                                 ) : (
@@ -4887,17 +5268,7 @@ function App() {
                                     aria-hidden={run.stage === "done" && !run.isThinkingExpanded}
                                   >
                                     <div className="chat-thinking-flow">
-                                      {runThinkingSteps.slice(0, run.visibleSteps).map((step, index, steps) => {
-                                        const isLoading = run.stage !== "done" && index === steps.length - 1;
-                                        return (
-                                          <div key={step} className={isLoading ? "chat-thinking-step is-loading" : "chat-thinking-step"}>
-                                            <span className="chat-thinking-icon" aria-hidden="true">
-                                              {isLoading ? <LoadingSpinnerIcon /> : <Icon name={getThinkingStepIcon(step)} />}
-                                            </span>
-                                            <span>{step}</span>
-                                          </div>
-                                        );
-                                      })}
+                                      {renderThinkingChainItems(runThinkingItems, run)}
                                     </div>
                                   </div>
                                 ) : null}
@@ -4936,59 +5307,64 @@ function App() {
                                     </button>
                                     {run.actionVariant === "resolution" ? (
                                       <div
-                                        className={
-                                          answerResolutionFeedback
-                                            ? "chat-result-resolution has-selection"
-                                            : "chat-result-resolution"
-                                        }
+                                        className={[
+                                          "chat-result-resolution",
+                                          answerResolutionFeedback ? "has-selection" : "",
+                                          isResolutionThanksVisible ? "is-thanks-visible" : ""
+                                        ]
+                                          .filter(Boolean)
+                                          .join(" ")}
                                         aria-label="回答解决情况"
                                       >
-                                        {isResolutionThanksVisible ? (
-                                          <span className="chat-result-resolution-thanks">谢谢你的反馈，我们会继续优化进步</span>
-                                        ) : (
-                                          <>
-                                            <span className="chat-result-resolution-text">是否有解决你的问题？</span>
-                                            <button
-                                              type="button"
-                                              className={
-                                                answerResolutionFeedback === "resolved"
-                                                  ? "chat-result-resolution-option is-active"
-                                                  : "chat-result-resolution-option"
-                                              }
-                                              aria-pressed={answerResolutionFeedback === "resolved"}
-                                              onClick={(event) => selectResolutionFeedback("resolved", event.currentTarget)}
-                                            >
-                                              <ResolutionIcon type="resolved" selected={answerResolutionFeedback === "resolved"} />
-                                              <span>解决了</span>
-                                            </button>
-                                            <button
-                                              type="button"
-                                              className={
-                                                answerResolutionFeedback === "partial"
-                                                  ? "chat-result-resolution-option is-active"
-                                                  : "chat-result-resolution-option"
-                                              }
-                                              aria-pressed={answerResolutionFeedback === "partial"}
-                                              onClick={(event) => selectResolutionFeedback("partial", event.currentTarget)}
-                                            >
-                                              <ResolutionIcon type="partial" selected={answerResolutionFeedback === "partial"} />
-                                              <span>部分解决</span>
-                                            </button>
-                                            <button
-                                              type="button"
-                                              className={
-                                                answerResolutionFeedback === "unresolved"
-                                                  ? "chat-result-resolution-option is-active"
-                                                  : "chat-result-resolution-option"
-                                              }
-                                              aria-pressed={answerResolutionFeedback === "unresolved"}
-                                              onClick={(event) => selectResolutionFeedback("unresolved", event.currentTarget)}
-                                            >
-                                              <ResolutionIcon type="unresolved" selected={answerResolutionFeedback === "unresolved"} />
-                                              <span>未解决</span>
-                                            </button>
-                                          </>
-                                        )}
+                                        <div className="chat-result-resolution-prompt" aria-hidden={isResolutionThanksVisible}>
+                                          <span className="chat-result-resolution-text">是否有解决你的问题？</span>
+                                          <button
+                                            type="button"
+                                            className={
+                                              answerResolutionFeedback === "resolved"
+                                                ? "chat-result-resolution-option is-active"
+                                                : "chat-result-resolution-option"
+                                            }
+                                            aria-pressed={answerResolutionFeedback === "resolved"}
+                                            onClick={(event) => selectResolutionFeedback("resolved", event.currentTarget)}
+                                          >
+                                            <ResolutionIcon type="resolved" selected={answerResolutionFeedback === "resolved"} />
+                                            <span>解决了</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className={
+                                              answerResolutionFeedback === "partial"
+                                                ? "chat-result-resolution-option is-active"
+                                                : "chat-result-resolution-option"
+                                            }
+                                            aria-pressed={answerResolutionFeedback === "partial"}
+                                            onClick={(event) => selectResolutionFeedback("partial", event.currentTarget)}
+                                          >
+                                            <ResolutionIcon type="partial" selected={answerResolutionFeedback === "partial"} />
+                                            <span>部分解决</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className={
+                                              answerResolutionFeedback === "unresolved"
+                                                ? "chat-result-resolution-option is-active"
+                                                : "chat-result-resolution-option"
+                                            }
+                                            aria-pressed={answerResolutionFeedback === "unresolved"}
+                                            onClick={(event) => selectResolutionFeedback("unresolved", event.currentTarget)}
+                                          >
+                                            <ResolutionIcon type="unresolved" selected={answerResolutionFeedback === "unresolved"} />
+                                            <span>未解决</span>
+                                          </button>
+                                        </div>
+                                        <span
+                                          className="chat-result-resolution-thanks"
+                                          aria-hidden={!isResolutionThanksVisible}
+                                          role={isResolutionThanksVisible ? "status" : undefined}
+                                        >
+                                          谢谢你的反馈，我们会继续优化进步
+                                        </span>
                                       </div>
                                     ) : (
                                       <>

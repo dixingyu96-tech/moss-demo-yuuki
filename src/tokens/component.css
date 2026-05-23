@@ -91,7 +91,7 @@
     var(--moss-sidebar-footer-links-row-height) + var(--moss-sidebar-user-row-min-height)
   );
   --moss-sidebar-footer-collapsed-actions-height: calc(
-    (var(--moss-sidebar-collapsed-control-size) * 2) + var(--gap-md)
+    (var(--moss-sidebar-collapsed-control-size) * 3) + (var(--gap-md) * 2)
   );
   --moss-sidebar-footer-collapsed-user-gap: 0px;
   --moss-sidebar-footer-hidden-shift: var(--padding-xs);

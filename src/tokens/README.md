@@ -15,6 +15,7 @@
 - `semantic.css`: 基于 Figma Moss 语义变量整理出的语义 token，并保留当前项目兼容别名。
 - `component.css`: Moss 当前项目的组件层 token，例如 `sidebar / card / composer / background`，该文件保留手工维护，不由同步脚本覆盖。
 - `BUTTON_SPEC.md`: 按钮规范与代码映射（对齐 Figma `98:90369`）。
+- `TOKEN_MAPPING.md`: 原始色板 → 语义色 → 组件 token 的完整映射手册（运行 `node scripts/generate-token-mapping.mjs` 可重新生成）。
 
 ## Usage Order
 
