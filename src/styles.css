@@ -4569,6 +4569,22 @@ textarea {
   outline: none;
 }
 
+.files-panel-segment-item.disabled,
+.files-panel-segment-item:disabled {
+  color: var(--colorTextDisabled);
+  cursor: not-allowed;
+}
+
+.files-panel-segment-item.disabled:hover,
+.files-panel-segment-item.disabled:focus-visible,
+.files-panel-segment-item:disabled:hover,
+.files-panel-segment-item:disabled:focus-visible {
+  color: var(--colorTextDisabled);
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
 .files-panel-segment-item.active {
   background: var(--colorBgContainer);
   color: var(--colorTextHeading);

@@ -1857,6 +1857,11 @@ function App() {
   }, [activeTab, visibleTabs]);
 
   useEffect(() => {
+    if (!isNewChatActive || filesPanelScope !== "current") return;
+    setFilesPanelScope("all");
+  }, [filesPanelScope, isNewChatActive]);
+
+  useEffect(() => {
     setIsResolutionThanksVisible(false);
     if (!answerResolutionFeedback) return;
 
@@ -4417,18 +4422,32 @@ function App() {
                 {[
                   { key: "all", label: "全部文件" },
                   { key: "current", label: "当前会话" }
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={filesPanelScope === item.key}
-                    className={filesPanelScope === item.key ? "files-panel-segment-item active" : "files-panel-segment-item"}
-                    onClick={() => setFilesPanelScope(item.key as FilesPanelScope)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                ].map((item) => {
+                  const isDisabled = isNewChatActive && item.key === "current";
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      role="tab"
+                      disabled={isDisabled}
+                      aria-disabled={isDisabled}
+                      aria-selected={filesPanelScope === item.key}
+                      className={[
+                        "files-panel-segment-item",
+                        filesPanelScope === item.key ? "active" : "",
+                        isDisabled ? "disabled" : ""
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => {
+                        if (isDisabled) return;
+                        setFilesPanelScope(item.key as FilesPanelScope);
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
               </div>
               <span className={isCurrentFilesPanelEmpty ? "files-panel-summary is-hidden" : "files-panel-summary"}>
                 {filesPanelSummary}
