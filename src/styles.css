@@ -5108,10 +5108,10 @@ textarea {
 .file-card-shared-tag {
   position: absolute;
   top: calc(-1 * var(--padding-xs) - 0.5px + 12px);
-  left: calc(-1 * var(--padding-xs) - 0.5px);
+  left: calc(-1 * var(--padding-xs) - 2px);
   z-index: 5;
-  width: 24px;
-  height: 20px;
+  width: 28px;
+  height: 24px;
   object-fit: contain;
   object-position: left top;
   pointer-events: none;
